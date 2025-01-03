@@ -13,6 +13,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.android.gms.tasks.Task;
 
 public class WebMonitor extends AccessibilityService {
     private static final String TAG = "WebMonitor";
@@ -24,6 +27,7 @@ public class WebMonitor extends AccessibilityService {
     // Cache to store the visited URLs and their timestamps
     private Map<String, Long> visitedUrlsCache = new HashMap<>();
     private static final long CACHE_EXPIRY_TIME = 5 * 1000; // 5 seconds cache expiry
+    private DatabaseHelper dbHelper;
 
     @Override
     public void onCreate() {
@@ -32,6 +36,7 @@ public class WebMonitor extends AccessibilityService {
         SharedPreferences prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE);
         userId = prefs.getString("userId", "defaultUserId");
         phoneModel = prefs.getString("phoneModel", "defaultPhoneModel");
+        dbHelper = new DatabaseHelper(); // Initialize DatabaseHelper
 
         Log.d(TAG, "WebMonitor started with userId: " + userId + " and phoneModel: " + phoneModel);
     }
@@ -51,6 +56,7 @@ public class WebMonitor extends AccessibilityService {
 
         return START_STICKY; // Important: Use START_STICKY
     }
+    
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
@@ -72,8 +78,9 @@ public class WebMonitor extends AccessibilityService {
                                 long timestamp = System.currentTimeMillis();
 
                                 WebVisitData visitData = new WebVisitData(url, title, timestamp);
-                                DatabaseHelper dbHelper = new DatabaseHelper();
-                                dbHelper.uploadWebVisitDataByDate(userId, phoneModel, visitData);
+                                dbHelper.uploadWebVisitDataByDate(userId, phoneModel, visitData)
+                                    .addOnSuccessListener(aVoid -> Log.d(TAG, "Web visit data uploaded successfully."))
+                                    .addOnFailureListener(e -> Log.e(TAG, "Failed to upload web visit data: " + e.getMessage()));
 
                                 // Update the cache with the new timestamp for this URL
                                 visitedUrlsCache.put(url, timestamp);

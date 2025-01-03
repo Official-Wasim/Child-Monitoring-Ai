@@ -1,25 +1,15 @@
 package com.childmonitorai;
 
 public class AppUsageData {
-    private String appName;
+
     private String packageName;
     private long usageDuration;
     private long timestamp;
 
-    public AppUsageData(String appName, String packageName, long usageDuration, long timestamp) {
-        this.appName = appName;
+    public AppUsageData(String packageName, long usageDuration, long timestamp) {
         this.packageName = packageName;
         this.usageDuration = usageDuration;
         this.timestamp = timestamp;
-    }
-
-    // Getters and setters
-    public String getAppName() {
-        return appName;
-    }
-
-    public void setAppName(String appName) {
-        this.appName = appName;
     }
 
     public String getPackageName() {

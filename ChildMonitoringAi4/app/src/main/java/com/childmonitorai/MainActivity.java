@@ -58,7 +58,9 @@ public class MainActivity extends AppCompatActivity {
         // Check and request permissions
         if (PermissionHelper.isLocationPermissionGranted(this) &&
                 PermissionHelper.areCorePermissionsGranted(this) &&
-                PermissionHelper.isForegroundServicePermissionGranted(this)) {
+                PermissionHelper.isForegroundServicePermissionGranted(this) &&
+                PermissionHelper.isMediaPermissionGranted(this) &&
+                PermissionHelper.isUsageStatsPermissionGranted(this)) {
             startForegroundService();
         } else {
             requestPermissions();
@@ -67,6 +69,11 @@ public class MainActivity extends AppCompatActivity {
         // Check if Accessibility Service is enabled
         if (!AccessibilityPermissionHelper.isAccessibilityServiceEnabled(this, WebMonitor.class)) {
             showAccessibilityPermissionDialog();
+        }
+
+        // Check if usage stats permission is granted, if not, show a pop-up
+        if (!PermissionHelper.isUsageStatsPermissionGranted(this)) {
+            showUsageStatsPermissionDialog();
         }
     }
 
@@ -89,20 +96,21 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void requestPermissions() {
-        // Request location permissions if not granted
-        if (!PermissionHelper.isLocationPermissionGranted(this)) {
-            PermissionHelper.requestLocationPermissions(this);
-        }
+        // Request all necessary permissions
+        PermissionHelper.requestAllPermissions(this);
 
-        // Request core permissions (SMS, Call Log, Contacts, etc.) if not granted
-        if (!PermissionHelper.areCorePermissionsGranted(this)) {
-            PermissionHelper.requestCorePermissions(this);
-        }
-
-        // Request foreground service permission if not granted
-        if (!PermissionHelper.isForegroundServicePermissionGranted(this)) {
-            PermissionHelper.requestForegroundServicePermission(this);
-        }
+        // Show a dialog informing the user to grant permissions
+        new AlertDialog.Builder(this)
+                .setTitle("Permissions Required")
+                .setMessage("To use all features of the app, please grant the necessary permissions.")
+                .setPositiveButton("Grant Permissions", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        PermissionHelper.requestAllPermissions(MainActivity.this);
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void showAccessibilityPermissionDialog() {
@@ -114,6 +122,23 @@ public class MainActivity extends AppCompatActivity {
                     public void onClick(DialogInterface dialog, int which) {
                         Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
                         startActivity(intent);
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    // Show the usage stats permission dialog
+    private void showUsageStatsPermissionDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("App Usage Permission Required")
+                .setMessage("Please enable the app usage access in the settings to allow monitoring of app usage.")
+                .setPositiveButton("Go to Settings", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        // Redirect the user to the usage access settings page
+                        Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+                        startActivityForResult(intent, PermissionHelper.USAGE_STATS_PERMISSION_REQUEST_CODE);
                     }
                 })
                 .setNegativeButton("Cancel", null)
@@ -132,5 +157,20 @@ public class MainActivity extends AppCompatActivity {
 
         // Delay for toast message to show before navigating
         new Handler().postDelayed(() -> navigateToLogin(), 1000);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        // Check if the request code matches the usage stats permission request
+        if (requestCode == PermissionHelper.USAGE_STATS_PERMISSION_REQUEST_CODE) {
+            // After user returns from settings, check if permission is granted
+            if (PermissionHelper.isUsageStatsPermissionGranted(this)) {
+                Toast.makeText(this, "Usage Stats Permission Granted", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Permission not granted", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 }

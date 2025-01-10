@@ -7,11 +7,13 @@ import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.os.AsyncTask;
 import android.util.Log;
 
 import com.google.firebase.database.DatabaseReference;
 
 import java.util.List;
+
 public class AppMonitor {
     private static final String TAG = "AppMonitor";
     private final String userId;
@@ -61,14 +63,24 @@ public class AppMonitor {
                 // Upload the app data using the sanitized package name as the unique key
                 uploadAppData(appData);
             } catch (PackageManager.NameNotFoundException e) {
-                Log.e(TAG, "Error fetching app info: " + e.getMessage());
+                Log.e(TAG, "Error fetching app info for package " + packageName + ": " + e.getMessage());
             }
         }
     }
 
     private void uploadAppData(AppData appData) {
-        String uniqueKey = databaseHelper.sanitizePath(appData.getPackageName()); // Use the sanitized package name as the unique key
-        databaseHelper.uploadAppData(userId, phoneModel, uniqueKey, appData.toMap()); // Pass the map representation of appData
+        // Use AsyncTask to handle Firebase upload in the background
+        new AsyncTask<AppData, Void, Void>() {
+            @Override
+            protected Void doInBackground(AppData... appDataArray) {
+                if (appDataArray.length > 0) {
+                    AppData data = appDataArray[0];
+                    String uniqueKey = databaseHelper.sanitizePath(data.getPackageName()); // Use the sanitized package name as the unique key
+                    databaseHelper.uploadAppData(userId, phoneModel, uniqueKey, data.toMap()); // Pass the map representation of appData
+                }
+                return null;
+            }
+        }.execute(appData);
     }
 
     private final BroadcastReceiver appInstallReceiver = new BroadcastReceiver() {
@@ -92,7 +104,7 @@ public class AppMonitor {
                         uploadAppData(appData);
                     }
                 } catch (PackageManager.NameNotFoundException e) {
-                    Log.e(TAG, "Error fetching app info: " + e.getMessage());
+                    Log.e(TAG, "Error fetching app info for package " + packageName + ": " + e.getMessage());
                 }
             }
         }

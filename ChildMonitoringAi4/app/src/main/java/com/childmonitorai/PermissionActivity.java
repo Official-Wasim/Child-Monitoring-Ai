@@ -96,6 +96,8 @@ public class PermissionActivity extends AppCompatActivity {
                 .show();
     }
 
+
+
     // Prompt user to enable Accessibility Service
     private void promptEnableAccessibilityService() {
         Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);

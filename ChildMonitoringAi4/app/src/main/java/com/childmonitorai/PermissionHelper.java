@@ -6,11 +6,8 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.provider.Settings;
-import android.text.TextUtils;
-
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,7 +17,8 @@ public class PermissionHelper {
     public static final int LOCATION_PERMISSION_REQUEST_CODE = 100;
     public static final int CORE_PERMISSION_REQUEST_CODE = 101;
     public static final int FOREGROUND_SERVICE_PERMISSION_REQUEST_CODE = 102;
-    public static final int MMS_PERMISSION_REQUEST_CODE = 103;
+    public static final int MEDIA_PERMISSION_REQUEST_CODE = 103;
+    public static final int USAGE_STATS_PERMISSION_REQUEST_CODE = 104;
 
     // Check if location permissions are granted
     public static boolean isLocationPermissionGranted(Context context) {
@@ -54,11 +52,31 @@ public class PermissionHelper {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             return ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED ||
                     ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED;
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            // For Android versions below 13, check for READ_EXTERNAL_STORAGE permission
+            return ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
         }
-        return true; // No media permission required for Android versions below 13
+        return true; // No media permission required for Android versions below Marshmallow (Android 6.0)
     }
 
+    // Check if usage stats permission is granted
+    public static boolean isUsageStatsPermissionGranted(Context context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            android.app.usage.UsageStatsManager usageStatsManager = (android.app.usage.UsageStatsManager) context.getSystemService(Context.USAGE_STATS_SERVICE);
+            if (usageStatsManager != null) {
+                long time = System.currentTimeMillis();
+                List<android.app.usage.UsageStats> stats = usageStatsManager.queryUsageStats(android.app.usage.UsageStatsManager.INTERVAL_DAILY, time - 1000 * 60 * 60 * 24, time);
+                return stats != null && !stats.isEmpty();
+            }
+        }
+        return false;
+    }
 
+    // Request usage stats permission (redirect to Settings)
+    public static void requestUsageStatsPermission(Activity activity) {
+        Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+        activity.startActivityForResult(intent, USAGE_STATS_PERMISSION_REQUEST_CODE);
+    }
 
     // Request location permissions
     public static void requestLocationPermissions(Activity activity) {
@@ -76,7 +94,7 @@ public class PermissionHelper {
     // Request core permissions (SMS, Call Log, Contacts, etc.)
     public static void requestCorePermissions(Activity activity) {
         ActivityCompat.requestPermissions(activity,
-                new String[]{
+                new String[] {
                         android.Manifest.permission.READ_SMS,
                         android.Manifest.permission.READ_CALL_LOG,
                         android.Manifest.permission.READ_CONTACTS,
@@ -86,15 +104,21 @@ public class PermissionHelper {
                 CORE_PERMISSION_REQUEST_CODE);
     }
 
-    // Request media-related permissions (Android 13+)
-    public static void requestMmsPermissions(Activity activity) {
+    // Request media-related permissions (Android 13+ and below)
+    public static void requestMediaPermissions(Activity activity) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // For Android 13+
             ActivityCompat.requestPermissions(activity,
                     new String[] {
                             android.Manifest.permission.READ_MEDIA_IMAGES,
                             android.Manifest.permission.READ_MEDIA_VIDEO
                     },
-                    MMS_PERMISSION_REQUEST_CODE);
+                    MEDIA_PERMISSION_REQUEST_CODE);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            // For Android 6.0 to 12
+            ActivityCompat.requestPermissions(activity,
+                    new String[] { android.Manifest.permission.READ_EXTERNAL_STORAGE },
+                    MEDIA_PERMISSION_REQUEST_CODE);
         }
     }
 
@@ -102,7 +126,7 @@ public class PermissionHelper {
     public static void requestForegroundServicePermission(Activity activity) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ActivityCompat.requestPermissions(activity,
-                    new String[]{android.Manifest.permission.FOREGROUND_SERVICE},
+                    new String[] { android.Manifest.permission.FOREGROUND_SERVICE },
                     FOREGROUND_SERVICE_PERMISSION_REQUEST_CODE);
         }
     }
@@ -126,10 +150,12 @@ public class PermissionHelper {
             permissions.add(android.Manifest.permission.FOREGROUND_SERVICE);
         }
 
-        // Media permissions (Android 13+)
+        // Media permissions (Android 13+ and below)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(android.Manifest.permission.READ_MEDIA_IMAGES);
             permissions.add(android.Manifest.permission.READ_MEDIA_VIDEO);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            permissions.add(android.Manifest.permission.READ_EXTERNAL_STORAGE);
         }
 
         // Request permissions

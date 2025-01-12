@@ -1,3 +1,4 @@
+// CommandListener.java
 package com.childmonitorai;
 
 import android.content.Context;
@@ -6,8 +7,12 @@ import android.util.Log;
 import com.google.firebase.database.ChildEventListener;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseException;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class CommandListener {
     private static final String TAG = "CommandListener";
@@ -25,46 +30,60 @@ public class CommandListener {
     }
 
     public void startListeningForCommands() {
-        // Initialize the listener for Firebase command data
         commandListener = new ChildEventListener() {
             @Override
-            public void onChildAdded(DataSnapshot dataSnapshot, String previousChildName) {
-                String date = dataSnapshot.getKey();
+            public void onChildAdded(DataSnapshot dateSnapshot, String previousChildName) {
+                String date = dateSnapshot.getKey();
                 Log.d(TAG, "Commands found for date: " + date);
 
-                // Loop through all commands for that date
-                for (DataSnapshot commandSnapshot : dataSnapshot.getChildren()) {
-                    Command command = commandSnapshot.getValue(Command.class);
+                for (DataSnapshot timestampSnapshot : dateSnapshot.getChildren()) {
+                    try {
+                        String timestamp = timestampSnapshot.getKey();
 
-                    if (command != null) {
-                        String commandId = commandSnapshot.getKey();
-                        Log.d(TAG, "Command fetched: " + commandId + " with details: " + command.toString());
-
-                        // Handle missing parameters by setting defaults
-                        String phoneNumber = command.getParams().get("phone_number");
-                        if (phoneNumber == null || phoneNumber.isEmpty()) {
-                            Log.d(TAG, "No phone_number provided for commandId: " + commandId);
-                            phoneNumber = "unknown"; // Default value
+                        // Add null check and type verification
+                        if (!timestampSnapshot.exists() || timestampSnapshot.getValue() == null) {
+                            Log.e(TAG, "Invalid command data for timestamp: " + timestamp);
+                            continue;
                         }
 
-                        String message = command.getParams().get("message");
-                        if (message == null || message.isEmpty()) {
-                            message = "No message provided"; // Default message if not present
-                        }
-
-                        // Log the phone number and message
-                        Log.d(TAG, "Phone number: " + phoneNumber + ", Message: " + message);
-
-                        // Execute the command using CommandExecutor
+                        Command command;
                         try {
-                            commandExecutor.executeCommand(command, commandId);
-                        } catch (Exception e) {
-                            Log.e(TAG, "Error executing command: " + commandId, e);
-                            updateCommandStatus(commandId, "failed");
+                            // Try direct conversion first
+                            command = timestampSnapshot.getValue(Command.class);
+                        } catch (DatabaseException e) {
+                            // If direct conversion fails, try manual parsing
+                            try {
+                                command = parseCommand(timestampSnapshot);
+                            } catch (Exception parseEx) {
+                                Log.e(TAG, "Error parsing command manually: " + parseEx.getMessage());
+                                continue;
+                            }
                         }
 
-                    } else {
-                        Log.d(TAG, "Invalid command data for commandId: " + commandSnapshot.getKey());
+                        if (command == null || command.getCommand() == null) {
+                            Log.e(TAG, "Invalid command structure for timestamp: " + timestamp);
+                            continue;
+                        }
+
+                        // Check if the command status is "pending"
+                        if (!"pending".equals(command.getStatus())) {
+                            Log.d(TAG, "Skipping command as its status is not 'pending': " + timestamp);
+                            continue;
+                        }
+
+                        Log.d(TAG, "Command fetched: " + timestamp +
+                                " with details: " + command.toString() +
+                                " params present: " + (command.getParams() != null && !command.getParams().isEmpty()));
+
+                        // Execute the command
+                        try {
+                            commandExecutor.executeCommand(command, date, timestamp);
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error executing command: " + timestamp, e);
+                            updateCommandStatus(date, timestamp, "failed", "Execution error: " + e.getMessage());
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error processing command: " + e.getMessage(), e);
                     }
                 }
             }
@@ -86,36 +105,59 @@ public class CommandListener {
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                Log.d(TAG, "Error while listening to commands: " + databaseError.getMessage());
+                Log.e(TAG, "Error while listening to commands: " + databaseError.getMessage());
             }
         };
 
-        // Attach the listener to the Firebase node for commands grouped by date
-        mDatabase.child("users").child(userId).child("phones").child(deviceId).child("commands")
-                .addChildEventListener(commandListener);
+        mDatabase.child("users").child(userId).child("phones").child(deviceId)
+                .child("commands").addChildEventListener(commandListener);
 
         Log.d(TAG, "Started listening for commands for userId: " + userId + " and deviceId: " + deviceId);
     }
 
+    private Command parseCommand(DataSnapshot snapshot) {
+        Command command = new Command();
+
+        if (snapshot.hasChild("command")) {
+            command.setCommand(snapshot.child("command").getValue(String.class));
+        }
+
+        if (snapshot.hasChild("status")) {
+            command.setStatus(snapshot.child("status").getValue(String.class));
+        }
+
+        if (snapshot.hasChild("result")) {
+            command.setResult(snapshot.child("result").getValue(String.class));
+        }
+
+        if (snapshot.hasChild("params")) {
+            DataSnapshot paramsSnapshot = snapshot.child("params");
+            Map<String, String> params = new HashMap<>();
+            for (DataSnapshot paramSnapshot : paramsSnapshot.getChildren()) {
+                params.put(paramSnapshot.getKey(), paramSnapshot.getValue(String.class));
+            }
+            command.setParams(params);
+        }
+
+        return command;
+    }
+
     public void stopListeningForCommands() {
         if (commandListener != null) {
-            mDatabase.child("users").child(userId).child("phones").child(deviceId).child("commands")
-                    .removeEventListener(commandListener); // Properly remove the listener
-
-            Log.d(TAG, "Stopped listening for commands for userId: " + userId + " and deviceId: " + deviceId);
+            mDatabase.child("users").child(userId).child("phones").child(deviceId)
+                    .child("commands").removeEventListener(commandListener);
+            Log.d(TAG, "Stopped listening for commands");
         }
     }
 
-    // Update the command status in Firebase to "completed" or "failed"
-    private void updateCommandStatus(String commandId, String status) {
-        mDatabase.child("users").child(userId).child("phones").child(deviceId).child("commands")
-                .child(commandId).child("status").setValue(status)
-                .addOnCompleteListener(task -> {
-                    if (task.isSuccessful()) {
-                        Log.d(TAG, "Command " + commandId + " status updated to: " + status);
-                    } else {
-                        Log.e(TAG, "Failed to update status for command " + commandId);
-                    }
-                });
+    private void updateCommandStatus(String date, String timestamp, String status, String result) {
+        DatabaseReference commandRef = mDatabase.child("users").child(userId)
+                .child("phones").child(deviceId).child("commands")
+                .child(date).child(timestamp);
+
+        commandRef.child("status").setValue(status);
+        if (result != null) {
+            commandRef.child("result").setValue(result);
+        }
     }
 }

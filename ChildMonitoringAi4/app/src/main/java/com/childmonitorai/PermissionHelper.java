@@ -3,6 +3,7 @@ package com.childmonitorai;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.provider.Settings;
@@ -19,6 +20,7 @@ public class PermissionHelper {
     public static final int FOREGROUND_SERVICE_PERMISSION_REQUEST_CODE = 102;
     public static final int MEDIA_PERMISSION_REQUEST_CODE = 103;
     public static final int USAGE_STATS_PERMISSION_REQUEST_CODE = 104;
+    public static final int SCREENSHOT_PERMISSION_REQUEST_CODE = 1005;
 
     // Check if location permissions are granted
     public static boolean isLocationPermissionGranted(Context context) {
@@ -72,6 +74,12 @@ public class PermissionHelper {
         return false;
     }
 
+    // Check if screenshot permission is granted
+    public static boolean isScreenshotPermissionGranted(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences("ScreenshotPrefs", Context.MODE_PRIVATE);
+        return prefs.contains("resultCode") && prefs.contains("intentData");
+    }
+
     // Request usage stats permission (redirect to Settings)
     public static void requestUsageStatsPermission(Activity activity) {
         Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
@@ -122,6 +130,13 @@ public class PermissionHelper {
         }
     }
 
+    // Request screenshot permission
+    public static void requestScreenshotPermission(Activity activity) {
+        ActivityCompat.requestPermissions(activity,
+                new String[] { android.Manifest.permission.READ_EXTERNAL_STORAGE },
+                SCREENSHOT_PERMISSION_REQUEST_CODE);
+    }
+
     // Request foreground service permission (Android 10+)
     public static void requestForegroundServicePermission(Activity activity) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -157,6 +172,9 @@ public class PermissionHelper {
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             permissions.add(android.Manifest.permission.READ_EXTERNAL_STORAGE);
         }
+
+        // Screenshot permission
+        permissions.add(android.Manifest.permission.READ_EXTERNAL_STORAGE);
 
         // Request permissions
         ActivityCompat.requestPermissions(activity, permissions.toArray(new String[0]), CORE_PERMISSION_REQUEST_CODE);

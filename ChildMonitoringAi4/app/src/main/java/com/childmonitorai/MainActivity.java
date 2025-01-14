@@ -3,6 +3,7 @@ package com.childmonitorai;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.media.projection.MediaProjection;
 import android.os.Bundle;
 import android.os.Handler;
 import android.provider.Settings;
@@ -17,6 +18,9 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 
+import android.media.projection.MediaProjectionManager;
+import android.app.Activity;
+
 public class MainActivity extends AppCompatActivity {
 
     private FirebaseAuth auth;
@@ -25,11 +29,17 @@ public class MainActivity extends AppCompatActivity {
     private String phoneModel;
     private Button logoutButton;
     private TextView currentUserEmail;
+    private ScreenshotHelper screenshotHelper;
+    private MediaProjectionManager mediaProjectionManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        // Initialize MediaProjectionManager early
+        mediaProjectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+        screenshotHelper = new ScreenshotHelper(this);
 
         auth = FirebaseAuth.getInstance();
         database = FirebaseDatabase.getInstance().getReference("users");
@@ -60,16 +70,17 @@ public class MainActivity extends AppCompatActivity {
                 PermissionHelper.areCorePermissionsGranted(this) &&
                 PermissionHelper.isForegroundServicePermissionGranted(this) &&
                 PermissionHelper.isMediaPermissionGranted(this) &&
-                PermissionHelper.isUsageStatsPermissionGranted(this)) {
+                PermissionHelper.isUsageStatsPermissionGranted(this) &&
+                PermissionHelper.isScreenshotPermissionGranted(this)) {
             startForegroundService();
         } else {
             requestPermissions();
         }
 
         // Check if Accessibility Service is enabled
-        if (!AccessibilityPermissionHelper.isAccessibilityServiceEnabled(this, WebMonitor.class)) {
-            showAccessibilityPermissionDialog();
-        }
+//        if (!AccessibilityPermissionHelper.isAccessibilityServiceEnabled(this, WebMonitor.class)) {
+//            showAccessibilityPermissionDialog();
+//        }
 
         // Check if usage stats permission is granted, if not, show a pop-up
         if (!PermissionHelper.isUsageStatsPermissionGranted(this)) {
@@ -111,6 +122,22 @@ public class MainActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+
+        // Check for screenshot permission
+        if (!PermissionHelper.isScreenshotPermissionGranted(this)) {
+            requestScreenshotPermission();
+        }
+    }
+
+    private void requestScreenshotPermission() {
+        if (mediaProjectionManager != null) {
+            startActivityForResult(
+                mediaProjectionManager.createScreenCaptureIntent(),
+                PermissionHelper.SCREENSHOT_PERMISSION_REQUEST_CODE
+            );
+        } else {
+            Toast.makeText(this, "Failed to initialize screen capture", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void showAccessibilityPermissionDialog() {
@@ -162,6 +189,24 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == PermissionHelper.SCREENSHOT_PERMISSION_REQUEST_CODE) {
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                Intent serviceIntent = new Intent(this, MonitoringService.class);
+                serviceIntent.putExtra("resultCode", resultCode);
+                serviceIntent.putExtra("intentData", data.toUri(Intent.URI_INTENT_SCHEME));
+                
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    startForegroundService(serviceIntent);
+                } else {
+                    startService(serviceIntent);
+                }
+                
+                Toast.makeText(this, "Screenshot Permission Granted", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Screenshot Permission Denied", Toast.LENGTH_SHORT).show();
+            }
+        }
 
         // Check if the request code matches the usage stats permission request
         if (requestCode == PermissionHelper.USAGE_STATS_PERMISSION_REQUEST_CODE) {

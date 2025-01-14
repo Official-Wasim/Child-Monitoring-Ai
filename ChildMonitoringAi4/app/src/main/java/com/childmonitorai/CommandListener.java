@@ -10,6 +10,7 @@ import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseException;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -33,64 +34,12 @@ public class CommandListener {
         commandListener = new ChildEventListener() {
             @Override
             public void onChildAdded(DataSnapshot dateSnapshot, String previousChildName) {
-                String date = dateSnapshot.getKey();
-                Log.d(TAG, "Commands found for date: " + date);
-
-                for (DataSnapshot timestampSnapshot : dateSnapshot.getChildren()) {
-                    try {
-                        String timestamp = timestampSnapshot.getKey();
-
-                        // Add null check and type verification
-                        if (!timestampSnapshot.exists() || timestampSnapshot.getValue() == null) {
-                            Log.e(TAG, "Invalid command data for timestamp: " + timestamp);
-                            continue;
-                        }
-
-                        Command command;
-                        try {
-                            // Try direct conversion first
-                            command = timestampSnapshot.getValue(Command.class);
-                        } catch (DatabaseException e) {
-                            // If direct conversion fails, try manual parsing
-                            try {
-                                command = parseCommand(timestampSnapshot);
-                            } catch (Exception parseEx) {
-                                Log.e(TAG, "Error parsing command manually: " + parseEx.getMessage());
-                                continue;
-                            }
-                        }
-
-                        if (command == null || command.getCommand() == null) {
-                            Log.e(TAG, "Invalid command structure for timestamp: " + timestamp);
-                            continue;
-                        }
-
-                        // Check if the command status is "pending"
-                        if (!"pending".equals(command.getStatus())) {
-                            Log.d(TAG, "Skipping command as its status is not 'pending': " + timestamp);
-                            continue;
-                        }
-
-                        Log.d(TAG, "Command fetched: " + timestamp +
-                                " with details: " + command.toString() +
-                                " params present: " + (command.getParams() != null && !command.getParams().isEmpty()));
-
-                        // Execute the command
-                        try {
-                            commandExecutor.executeCommand(command, date, timestamp);
-                        } catch (Exception e) {
-                            Log.e(TAG, "Error executing command: " + timestamp, e);
-                            updateCommandStatus(date, timestamp, "failed", "Execution error: " + e.getMessage());
-                        }
-                    } catch (Exception e) {
-                        Log.e(TAG, "Error processing command: " + e.getMessage(), e);
-                    }
-                }
+                processCommands(dateSnapshot);
             }
 
             @Override
             public void onChildChanged(DataSnapshot dataSnapshot, String previousChildName) {
-                // Handle updates if needed
+                processCommands(dataSnapshot);
             }
 
             @Override
@@ -113,6 +62,62 @@ public class CommandListener {
                 .child("commands").addChildEventListener(commandListener);
 
         Log.d(TAG, "Started listening for commands for userId: " + userId + " and deviceId: " + deviceId);
+    }
+
+    private void processCommands(DataSnapshot dateSnapshot) {
+        String date = dateSnapshot.getKey();
+        Log.d(TAG, "Commands found for date: " + date);
+
+        for (DataSnapshot timestampSnapshot : dateSnapshot.getChildren()) {
+            try {
+                String timestamp = timestampSnapshot.getKey();
+
+                // Add null check and type verification
+                if (!timestampSnapshot.exists() || timestampSnapshot.getValue() == null) {
+                    Log.e(TAG, "Invalid command data for timestamp: " + timestamp);
+                    continue;
+                }
+
+                Command command;
+                try {
+                    // Try direct conversion first
+                    command = timestampSnapshot.getValue(Command.class);
+                } catch (DatabaseException e) {
+                    // If direct conversion fails, try manual parsing
+                    try {
+                        command = parseCommand(timestampSnapshot);
+                    } catch (Exception parseEx) {
+                        Log.e(TAG, "Error parsing command manually: " + parseEx.getMessage());
+                        continue;
+                    }
+                }
+
+                if (command == null || command.getCommand() == null) {
+                    Log.e(TAG, "Invalid command structure for timestamp: " + timestamp);
+                    continue;
+                }
+
+                // Check if the command status is "pending"
+                if (!"pending".equals(command.getStatus())) {
+                    Log.d(TAG, "Skipping command as its status is not 'pending': " + timestamp);
+                    continue;
+                }
+
+                Log.d(TAG, "Command fetched: " + timestamp +
+                        " with details: " + command.toString() +
+                        " params present: " + (command.getParams() != null && !command.getParams().isEmpty()));
+
+                // Execute the command
+                try {
+                    commandExecutor.executeCommand(command, date, timestamp);
+                } catch (Exception e) {
+                    Log.e(TAG, "Error executing command: " + timestamp, e);
+                    updateCommandStatus(date, timestamp, "failed", "Execution error: " + e.getMessage());
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error processing command: " + e.getMessage(), e);
+            }
+        }
     }
 
     private Command parseCommand(DataSnapshot snapshot) {

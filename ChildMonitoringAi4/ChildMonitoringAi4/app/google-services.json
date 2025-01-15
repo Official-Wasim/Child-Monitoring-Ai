@@ -1,0 +1,87 @@
+{
+  "project_info": {
+    "project_number": "639746665410",
+    "firebase_url": "https://child-monitor-ai-default-rtdb.firebaseio.com",
+    "project_id": "child-monitor-ai",
+    "storage_bucket": "child-monitor-ai.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:639746665410:android:d3a1e6e78d0d4215b7445b",
+        "android_client_info": {
+          "package_name": "com.childmonitorai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD0fzcELxtrQsrYi0AsSpyZFtuU87P8erA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:639746665410:android:6d67a990c64dbd86b7445b",
+        "android_client_info": {
+          "package_name": "com.childmonitoringai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD0fzcELxtrQsrYi0AsSpyZFtuU87P8erA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:639746665410:android:c7a3b62bfed1ce36b7445b",
+        "android_client_info": {
+          "package_name": "com.childmonitoringdashboard"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD0fzcELxtrQsrYi0AsSpyZFtuU87P8erA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:639746665410:android:a25d5de32ef9bf43b7445b",
+        "android_client_info": {
+          "package_name": "com.example.test"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD0fzcELxtrQsrYi0AsSpyZFtuU87P8erA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

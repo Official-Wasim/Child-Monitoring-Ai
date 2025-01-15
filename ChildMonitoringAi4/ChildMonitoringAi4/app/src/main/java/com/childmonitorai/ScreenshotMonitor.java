@@ -5,12 +5,9 @@ import android.content.Intent;
 import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
-import android.media.Image;
-import android.media.ImageReader;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.util.DisplayMetrics;
-import android.util.Log;
 import android.view.Display;
 import android.view.Surface;
 import android.view.SurfaceView;
@@ -22,7 +19,6 @@ import android.os.Handler;
 import android.view.WindowManager;
 import android.os.Looper;
 import java.io.ByteArrayOutputStream;
-import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -30,8 +26,6 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
 
 public class ScreenshotMonitor {
     private static final long SCREENSHOT_INTERVAL = 15 * 60 * 1000; // 15 minutes
@@ -49,9 +43,6 @@ public class ScreenshotMonitor {
     private int screenDensity;
     private int displayWidth;
     private int displayHeight;
-    private FirebaseAuth mAuth;
-    private ImageReader imageReader;
-    private ScreenshotHelper screenshotHelper;
 
     private final Runnable screenshotRunnable = new Runnable() {
         @Override
@@ -67,19 +58,17 @@ public class ScreenshotMonitor {
         this.context = context;
         this.handler = new Handler(Looper.getMainLooper());
         this.storageHelper = new FirebaseStorageHelper();
-        this.screenshotHelper = new ScreenshotHelper(context);
-        
         mediaProjectionManager = (MediaProjectionManager) context.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
         DisplayMetrics metrics = context.getResources().getDisplayMetrics();
         screenDensity = metrics.densityDpi;
-        
-        WindowManager wm = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
-        Display display = wm.getDefaultDisplay();
+        Display display = ((WindowManager) context.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay();
         displayWidth = display.getWidth();
         displayHeight = display.getHeight();
-        
-        imageReader = ImageReader.newInstance(displayWidth, displayHeight, PixelFormat.RGBA_8888, 2);
-        mAuth = FirebaseAuth.getInstance();
+        surfaceView = new SurfaceView(context);
+        surface = surfaceView.getHolder().getSurface();
+        if (!checkPermissions()) {
+            requestPermissions();
+        }
     }
 
     private boolean checkPermissions() {
@@ -114,90 +103,35 @@ public class ScreenshotMonitor {
         }
     }
 
-    private void setupVirtualDisplay() {
-        if (mediaProjection != null) {
-            virtualDisplay = mediaProjection.createVirtualDisplay(
-                "ScreenshotMonitor",
-                displayWidth, displayHeight, screenDensity,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                imageReader.getSurface(), null, null);
-        }
-    }
-
     private void takeScreenshot() {
         if (!checkPermissions()) {
             requestPermissions();
             return;
         }
-
-        FirebaseUser currentUser = mAuth.getCurrentUser();
-        if (currentUser == null) {
-            Toast.makeText(context, "No user signed in", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        if (mediaProjection == null || virtualDisplay == null) {
+        // Get current timestamp
+        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+        String fileName = "screenshot_" + timestamp + ".jpg";
+        
+        if (mediaProjection == null) {
             requestMediaProjectionPermission();
             return;
         }
+        startVirtualDisplay();
+        
+        // Capture screenshot using MediaProjection
+        Bitmap screenshot = captureScreen();
+        
+        if (screenshot != null) {
+            // Convert bitmap to byte array
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            screenshot.compress(Bitmap.CompressFormat.JPEG, 100, baos);
+            byte[] imageData = baos.toByteArray();
 
-        try {
-            String userId = currentUser.getUid();
+            // Upload to Firebase Storage
             String deviceModel = android.os.Build.MODEL;
-            SimpleDateFormat folderDateFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
-            SimpleDateFormat fileFormat = new SimpleDateFormat("HHmmss", Locale.getDefault());
-            Date now = new Date();
-            
-            String folderDate = folderDateFormat.format(now);
-            String fileName = "screenshot_" + fileFormat.format(now) + ".jpg";
-
-            // Ensure virtual display is set up
-            if (virtualDisplay == null) {
-                setupVirtualDisplay();
-            }
-
-            // Take screenshot using ImageReader
-            Image image = imageReader.acquireLatestImage();
-            if (image != null) {
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                try {
-                    Bitmap bitmap = imageToBitmap(image);
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos);
-                    byte[] screenshotData = baos.toByteArray();
-
-                    storageHelper.uploadScreenshot(userId, deviceModel, folderDate, fileName, 
-                        screenshotData, new FirebaseStorageHelper.UploadCallback() {
-                            @Override
-                            public void onSuccess(String downloadUrl) {
-                                handler.post(() -> Log.d("ScreenshotMonitor", "Screenshot uploaded: " + downloadUrl));
-                            }
-
-                            @Override
-                            public void onFailure(String error) {
-                                handler.post(() -> Log.e("ScreenshotMonitor", "Screenshot upload failed: " + error));
-                            }
-                        });
-                } finally {
-                    image.close();
-                    baos.close();
-                }
-            }
-        } catch (Exception e) {
-            Log.e("ScreenshotMonitor", "Error taking screenshot: " + e.getMessage());
+            String path = "screenshots/" + deviceModel + "/" + fileName;
+            storageHelper.uploadImage(path, imageData);
         }
-    }
-
-    private Bitmap imageToBitmap(Image image) {
-        Image.Plane[] planes = image.getPlanes();
-        ByteBuffer buffer = planes[0].getBuffer();
-        int pixelStride = planes[0].getPixelStride();
-        int rowStride = planes[0].getRowStride();
-        int rowPadding = rowStride - pixelStride * displayWidth;
-
-        Bitmap bitmap = Bitmap.createBitmap(displayWidth + rowPadding / pixelStride,
-                displayHeight, Bitmap.Config.ARGB_8888);
-        bitmap.copyPixelsFromBuffer(buffer);
-        return bitmap;
     }
 
     private void requestMediaProjectionPermission() {
@@ -210,16 +144,19 @@ public class ScreenshotMonitor {
     }
 
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == REQUEST_CODE && resultCode == Activity.RESULT_OK) {
-            mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data);
-            if (mediaProjection != null) {
-                // Initialize screenshot components
-                setupVirtualDisplay();
-                screenshotHelper.setMediaProjection(mediaProjection);
-                startMonitoring();
+        if (requestCode == REQUEST_CODE) {
+            if (resultCode == Activity.RESULT_OK) {
+                mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data);
+                // Store the intent data for later use when taking screenshots
+                context.getSharedPreferences("ScreenshotPrefs", Context.MODE_PRIVATE)
+                    .edit()
+                    .putInt("resultCode", resultCode)
+                    .putString("intentData", data.toUri(Intent.URI_INTENT_SCHEME))
+                    .apply();
+                takeScreenshot();
+            } else {
+                Toast.makeText(context, "Permission denied", Toast.LENGTH_SHORT).show();
             }
-        } else {
-            Toast.makeText(context, "Screenshot permission denied", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -266,14 +203,5 @@ public class ScreenshotMonitor {
         if (mediaProjection != null) {
             mediaProjection.stop();
         }
-    }
-
-    @Override
-    protected void finalize() throws Throwable {
-        stopMonitoring();
-        if (imageReader != null) {
-            imageReader.close();
-        }
-        super.finalize();
     }
 }

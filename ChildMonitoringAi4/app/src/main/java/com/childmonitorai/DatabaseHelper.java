@@ -70,6 +70,7 @@ public class DatabaseHelper {
                 smsMap.put("body", smsData.getBody());
                 smsMap.put("timestamp", smsData.getTimestamp());
                 smsMap.put("date", smsData.getDate());
+                smsMap.put("contactName", smsData.getContactName()); // Include contact name
 
                 smsRef.setValue(smsMap).addOnSuccessListener(aVoid ->
                                 Log.d("DatabaseHelper", "SMS data uploaded successfully."))

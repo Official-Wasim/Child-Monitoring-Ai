@@ -86,6 +86,6 @@ public class ContactMonitor {
     }
 
     private String generateUniqueId(String contactId) {
-        return contactId; // Use the contactId as the unique identifier
+        return contactId; 
     }
 }

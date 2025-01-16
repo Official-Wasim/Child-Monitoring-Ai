@@ -16,11 +16,13 @@ public class CallMonitor {
     private String phoneModel;
     private Context context;
     private BaseContentObserver callLogObserver;
+    private long installationDate;
 
     public CallMonitor(Context context, String userId, String phoneModel) {
         this.context = context;
         this.userId = userId;  // Passed in user ID
         this.phoneModel = phoneModel;  // Passed in phone model
+        this.installationDate = System.currentTimeMillis(); // Set installation date to current time
     }
 
     public void startMonitoring() {
@@ -58,14 +60,12 @@ public class CallMonitor {
     }
 
     private void fetchCalls() {
-        // Fetch the call logs and upload to Firebase
         Cursor cursor = null;
         try {
             cursor = context.getContentResolver().query(CallLog.Calls.CONTENT_URI,
-                    null, null, null, CallLog.Calls.DATE + " DESC");
+                    null, "date >= ?", new String[]{String.valueOf(installationDate)}, CallLog.Calls.DATE + " DESC");
 
             if (cursor != null && cursor.moveToFirst()) {
-                // Loop through all the call logs and upload each one
                 do {
                     int phoneNumberColumnIndex = cursor.getColumnIndex(CallLog.Calls.NUMBER);
                     int callTypeColumnIndex = cursor.getColumnIndex(CallLog.Calls.TYPE);
@@ -81,15 +81,17 @@ public class CallMonitor {
                         long timestamp = cursor.getLong(callDateColumnIndex);
                         String callDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date(timestamp));
 
-                        CallData callData = new CallData(phoneNumber, callType, callDuration, callDate);
-                        callData.setTimestamp(timestamp);
+                        if (timestamp >= installationDate) { // Check if call log is from the date of installation
+                            CallData callData = new CallData(phoneNumber, callType, callDuration, callDate);
+                            callData.setTimestamp(timestamp);
 
-                        // Generate a unique ID based on phone number and timestamp
-                        String uniqueCallId = generateUniqueId(phoneNumber, timestamp);
+                            // Generate a unique ID based on phone number and timestamp
+                            String uniqueCallId = generateUniqueId(phoneNumber, timestamp);
 
-                        // Check for duplication of recent calls only
-                        DatabaseHelper dbHelper = new DatabaseHelper();
-                        dbHelper.uploadCallDataByDate(userId, phoneModel, callData, uniqueCallId, callDate);
+                            // Check for duplication of recent calls only
+                            DatabaseHelper dbHelper = new DatabaseHelper();
+                            dbHelper.uploadCallDataByDate(userId, phoneModel, callData, uniqueCallId, callDate);
+                        }
                     } else {
                         Log.w(TAG, "Missing required columns in the call log.");
                     }

@@ -6,6 +6,7 @@ public class SMSData {
     private String body;
     private String date;
     private long timestamp;
+    private String contactName;
 
     public SMSData(String type, String address, String body, String date) {
         this.type = type;
@@ -53,5 +54,13 @@ public class SMSData {
 
     public void setTimestamp(long timestamp) {
         this.timestamp = timestamp;
+    }
+
+    public String getContactName() {
+        return contactName;
+    }
+
+    public void setContactName(String contactName) {
+        this.contactName = contactName;
     }
 }

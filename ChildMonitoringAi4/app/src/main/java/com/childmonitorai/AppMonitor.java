@@ -10,22 +10,27 @@ import android.content.pm.PackageManager;
 import android.os.AsyncTask;
 import android.util.Log;
 
-import com.google.firebase.database.DatabaseReference;
-
 import java.util.List;
+import java.util.ArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class AppMonitor {
     private static final String TAG = "AppMonitor";
+    private static final int BATCH_SIZE = 10;
     private final String userId;
     private final String phoneModel;
     private final Context context;
     private final DatabaseHelper databaseHelper;
+    private final ExecutorService executorService;
 
     public AppMonitor(Context context, String userId, String phoneModel) {
         this.context = context;
         this.userId = userId;
         this.phoneModel = phoneModel;
         this.databaseHelper = new DatabaseHelper();
+        this.executorService = Executors.newSingleThreadExecutor();
     }
 
     public void startMonitoring() {
@@ -36,17 +41,24 @@ public class AppMonitor {
         filter.addDataScheme("package");
         context.registerReceiver(appInstallReceiver, filter);
 
-        // Upload the currently installed apps at the time of startup
+        // Upload the currently installed apps at startup
         uploadInstalledApps();
     }
 
     public void stopMonitoring() {
-        context.unregisterReceiver(appInstallReceiver);
+        try {
+            context.unregisterReceiver(appInstallReceiver);
+            executorService.shutdown();
+            executorService.awaitTermination(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Log.e(TAG, "Error shutting down executor: " + e.getMessage());
+        }
     }
 
     private void uploadInstalledApps() {
         PackageManager packageManager = context.getPackageManager();
         List<ApplicationInfo> apps = packageManager.getInstalledApplications(PackageManager.GET_META_DATA);
+        List<AppData> batch = new ArrayList<>();
 
         for (ApplicationInfo app : apps) {
             String appName = app.loadLabel(packageManager).toString();
@@ -54,33 +66,72 @@ public class AppMonitor {
 
             try {
                 PackageInfo packageInfo = packageManager.getPackageInfo(packageName, 0);
-                long appSize = new java.io.File(packageInfo.applicationInfo.sourceDir).length(); // App size in bytes
-                String version = packageInfo.versionName; // App version
+                long appSize = new java.io.File(packageInfo.applicationInfo.sourceDir).length();
+                String version = packageInfo.versionName;
 
-                // Create an AppData object with installation status
                 AppData appData = new AppData(appName, packageName, System.currentTimeMillis(), "installed", appSize, version);
+                appData.setCategory(getAppCategory(app));
+                batch.add(appData);
 
-                // Upload the app data using the sanitized package name as the unique key
-                uploadAppData(appData);
+                if (batch.size() >= BATCH_SIZE) {
+                    uploadBatch(new ArrayList<>(batch));
+                    batch.clear();
+                }
             } catch (PackageManager.NameNotFoundException e) {
                 Log.e(TAG, "Error fetching app info for package " + packageName + ": " + e.getMessage());
             }
         }
+
+        if (!batch.isEmpty()) {
+            uploadBatch(batch);
+        }
     }
 
-    private void uploadAppData(AppData appData) {
-        // Use AsyncTask to handle Firebase upload in the background
-        new AsyncTask<AppData, Void, Void>() {
-            @Override
-            protected Void doInBackground(AppData... appDataArray) {
-                if (appDataArray.length > 0) {
-                    AppData data = appDataArray[0];
-                    String uniqueKey = databaseHelper.sanitizePath(data.getPackageName()); // Use the sanitized package name as the unique key
-                    databaseHelper.uploadAppData(userId, phoneModel, uniqueKey, data.toMap()); // Pass the map representation of appData
-                }
-                return null;
+    private void uploadBatch(List<AppData> batch) {
+        executorService.submit(() -> {
+            for (AppData appData : batch) {
+                String uniqueKey = databaseHelper.sanitizePath(appData.getPackageName());
+                databaseHelper.uploadAppData(userId, phoneModel, uniqueKey, appData.toMap());
             }
-        }.execute(appData);
+        });
+    }
+
+    private String getAppCategory(ApplicationInfo app) {
+        if ((app.flags & ApplicationInfo.FLAG_SYSTEM) != 0) {
+            return "SYSTEM";
+        } else if ((app.flags & ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0) {
+            return "UPDATED_SYSTEM";
+        } else {
+            return "USER_INSTALLED";
+        }
+    }
+
+    private void uploadAppData(final AppData appData) {
+        // Make AsyncTask static and pass necessary context through constructor
+        new AppDataUploadTask(userId, phoneModel, databaseHelper).execute(appData);
+    }
+
+    // Static AsyncTask class to prevent memory leaks
+    private static class AppDataUploadTask extends AsyncTask<AppData, Void, Void> {
+        private final String userId;
+        private final String phoneModel;
+        private final DatabaseHelper databaseHelper;
+
+        AppDataUploadTask(String userId, String phoneModel, DatabaseHelper databaseHelper) {
+            this.userId = userId;
+            this.phoneModel = phoneModel;
+            this.databaseHelper = databaseHelper;
+        }
+
+        @Override
+        protected Void doInBackground(AppData... appDataArray) {
+            if (appDataArray.length > 0) {
+                AppData data = appDataArray[0];
+                String uniqueKey = databaseHelper.sanitizePath(data.getPackageName());
+                databaseHelper.uploadAppData(userId, phoneModel, uniqueKey, data.toMap());
+            }
+            return null;
+        }
     }
 
     private final BroadcastReceiver appInstallReceiver = new BroadcastReceiver() {

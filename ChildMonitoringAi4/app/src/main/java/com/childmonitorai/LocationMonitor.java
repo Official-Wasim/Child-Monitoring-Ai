@@ -87,7 +87,7 @@ public class LocationMonitor {
                     Looper.getMainLooper()
             );
         } catch (SecurityException e) {
-            Log.e(TAG, "Permission denied: " + e.getMessage());
+            Log.e(TAG, "Location Permission denied: " + e.getMessage());
         }
 
         // Start periodic location uploads
@@ -127,7 +127,7 @@ public class LocationMonitor {
                     Log.w(TAG, "No last known location available.");
                 }
             } catch (SecurityException e) {
-                Log.e(TAG, "Permission denied: " + e.getMessage());
+                Log.e(TAG, "Location Permission denied: " + e.getMessage());
             }
 
             // Schedule the next location fetch

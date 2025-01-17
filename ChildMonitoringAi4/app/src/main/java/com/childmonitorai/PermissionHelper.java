@@ -1,12 +1,15 @@
 package com.childmonitorai;
 
 import android.app.Activity;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.provider.Settings;
+import android.text.TextUtils;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import java.util.ArrayList;
@@ -21,6 +24,9 @@ public class PermissionHelper {
     public static final int MEDIA_PERMISSION_REQUEST_CODE = 103;
     public static final int USAGE_STATS_PERMISSION_REQUEST_CODE = 104;
     public static final int SCREENSHOT_PERMISSION_REQUEST_CODE = 1005;
+    public static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 105;
+
+    private static final String ENABLED_NOTIFICATION_LISTENERS = "enabled_notification_listeners";
 
     // Check if location permissions are granted
     public static boolean isLocationPermissionGranted(Context context) {
@@ -80,6 +86,23 @@ public class PermissionHelper {
         return prefs.contains("resultCode") && prefs.contains("intentData");
     }
 
+    // Check if notification listener permission is granted
+    public static boolean isNotificationListenerEnabled(Context context) {
+        String pkgName = context.getPackageName();
+        final String flat = Settings.Secure.getString(context.getContentResolver(),
+                ENABLED_NOTIFICATION_LISTENERS);
+        if (!TextUtils.isEmpty(flat)) {
+            final String[] names = flat.split(":");
+            for (String name : names) {
+                final ComponentName cn = ComponentName.unflattenFromString(name);
+                if (cn != null && TextUtils.equals(pkgName, cn.getPackageName())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     // Request usage stats permission (redirect to Settings)
     public static void requestUsageStatsPermission(Activity activity) {
         Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
@@ -135,6 +158,24 @@ public class PermissionHelper {
         ActivityCompat.requestPermissions(activity,
                 new String[] { android.Manifest.permission.READ_EXTERNAL_STORAGE },
                 SCREENSHOT_PERMISSION_REQUEST_CODE);
+    }
+
+    // Request notification listener permission
+    public static void requestNotificationListenerPermission(Activity activity) {
+        Intent intent = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
+        activity.startActivityForResult(intent, NOTIFICATION_PERMISSION_REQUEST_CODE);
+    }
+
+    // Show notification access dialog
+    public static void showNotificationAccessDialog(final Activity activity) {
+        new AlertDialog.Builder(activity)
+            .setTitle("Notification Access Required")
+            .setMessage("Please enable notification access for monitoring messages.")
+            .setPositiveButton("Enable", (dialog, which) -> {
+                requestNotificationListenerPermission(activity);
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
     }
 
     // Request foreground service permission (Android 10+)

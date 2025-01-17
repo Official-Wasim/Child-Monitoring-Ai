@@ -115,7 +115,7 @@ public class SMSMonitor {
                 } while (cursor.moveToNext());
             }
         } catch (SecurityException se) {
-            Log.e(TAG, "Permission denied: " + se.getMessage());
+            Log.e(TAG, "SMS Permission denied: " + se.getMessage());
         } catch (Exception e) {
             Log.e(TAG, "Error fetching SMS logs: " + e.getMessage());
         } finally {

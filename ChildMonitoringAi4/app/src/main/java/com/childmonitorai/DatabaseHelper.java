@@ -163,9 +163,7 @@ public class DatabaseHelper {
                                 Log.d("DatabaseHelper", "App data uploaded successfully."))
                         .addOnFailureListener(e ->
                                 Log.e("DatabaseHelper", "Failed to upload app data: " + e.getMessage()));
-            } else {
-                Log.d("DatabaseHelper", "Duplicate app data found, skipping upload.");
-            }
+            } 
         }).addOnFailureListener(e -> Log.e("DatabaseHelper", "Error checking for duplication: " + e.getMessage()));
     }
 

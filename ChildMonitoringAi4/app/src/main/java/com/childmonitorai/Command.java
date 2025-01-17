@@ -18,6 +18,9 @@ public class Command {
     @PropertyName("result")
     private String result;
 
+    @PropertyName("lastUpdated")
+    private long lastUpdated;
+
     // Default constructor required for Firebase
     public Command() {
         this.params = new HashMap<>();
@@ -73,6 +76,16 @@ public class Command {
         this.result = result;
     }
 
+    @PropertyName("lastUpdated")
+    public long getLastUpdated() {
+        return lastUpdated;
+    }
+
+    @PropertyName("lastUpdated")
+    public void setLastUpdated(long lastUpdated) {
+        this.lastUpdated = lastUpdated;
+    }
+
     // Utility method to safely get param with default value
     public String getParam(String key, String defaultValue) {
         if (params != null && params.containsKey(key)) {
@@ -88,6 +101,7 @@ public class Command {
                 ", params=" + params +
                 ", status='" + status + '\'' +
                 ", result='" + result + '\'' +
+                ", lastUpdated=" + lastUpdated +
                 '}';
     }
 }

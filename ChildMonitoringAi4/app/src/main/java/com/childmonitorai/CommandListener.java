@@ -27,7 +27,10 @@ public class CommandListener {
         this.userId = userId;
         this.deviceId = deviceId;
         this.mDatabase = FirebaseDatabase.getInstance().getReference();
-        this.commandExecutor = new CommandExecutor(userId, deviceId, context);
+    }
+
+    public void setCommandExecutor(CommandExecutor executor) {
+        this.commandExecutor = executor;
     }
 
     public void startListeningForCommands() {

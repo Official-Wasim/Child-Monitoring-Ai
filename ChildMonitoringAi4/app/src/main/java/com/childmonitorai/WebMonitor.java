@@ -28,6 +28,11 @@ public class WebMonitor extends AccessibilityService {
     private Map<String, Long> visitedUrlsCache = new HashMap<>();
     private static final long CACHE_EXPIRY_TIME = 5 * 1000; // 5 seconds cache expiry
     private DatabaseHelper dbHelper;
+    private KeywordMonitor keywordMonitor;
+    private Map<String, WebVisitData> activeVisits = new HashMap<>();
+    private static final long INACTIVE_THRESHOLD = 30 * 1000; // 30 seconds threshold
+    private static final long UPDATE_INTERVAL = 5 * 1000; // Update duration every 5 seconds
+    private String currentUrl = null;
 
     @Override
     public void onCreate() {
@@ -37,6 +42,7 @@ public class WebMonitor extends AccessibilityService {
         userId = prefs.getString("userId", "defaultUserId");
         phoneModel = prefs.getString("phoneModel", "defaultPhoneModel");
         dbHelper = new DatabaseHelper(); // Initialize DatabaseHelper
+        keywordMonitor = new KeywordMonitor(userId);
 
         Log.d(TAG, "WebMonitor started with userId: " + userId + " and phoneModel: " + phoneModel);
     }
@@ -60,39 +66,99 @@ public class WebMonitor extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        if (userId != null && phoneModel != null) {
-            if (event.getEventType() == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED ||
-                    event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+        if (userId == null || phoneModel == null) return;
 
-                String packageName = event.getPackageName().toString();
+        if (event.getEventType() == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED ||
+                event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
 
-                if (isBrowserPackage(packageName)) {
-                    AccessibilityNodeInfo rootNode = event.getSource();
-                    if (rootNode != null) {
-                        String url = extractUrlFromNode(rootNode);
-
-                        if (url != null && !url.equals("No URL Found")) {
-                            // Check if the URL has already been uploaded recently
-                            if (shouldUploadUrl(url)) {
-                                String title = packageName;
-                                long timestamp = System.currentTimeMillis();
-
-                                WebVisitData visitData = new WebVisitData(url, title, timestamp);
-                                dbHelper.uploadWebVisitDataByDate(userId, phoneModel, visitData)
-                                    .addOnSuccessListener(aVoid -> Log.d(TAG, "Web visit data uploaded successfully."))
-                                    .addOnFailureListener(e -> Log.e(TAG, "Failed to upload web visit data: " + e.getMessage()));
-
-                                // Update the cache with the new timestamp for this URL
-                                visitedUrlsCache.put(url, timestamp);
-
-                                Log.d(TAG, "URL Detected and Uploaded: " + url);
-                            } else {
-                                Log.d(TAG, "URL already uploaded recently: " + url);
-                            }
-                        }
-                    }
+            String packageName = event.getPackageName().toString();
+            if (isBrowserPackage(packageName)) {
+                AccessibilityNodeInfo rootNode = event.getSource();
+                if (rootNode != null) {
+                    String url = extractUrlFromNode(rootNode);
+                    handleUrlVisit(url, packageName);
                 }
             }
+        }
+    }
+
+    private void handleUrlVisit(String url, String packageName) {
+        if (url == null || url.equals("No URL Found")) return;
+
+        long currentTime = System.currentTimeMillis();
+        
+        // Only process if URL has changed
+        if (!url.equals(currentUrl)) {
+            Log.d(TAG, "URL changed from " + currentUrl + " to " + url);
+            
+            // Close tracking for previous URL
+            if (currentUrl != null) {
+                WebVisitData previousVisit = activeVisits.get(currentUrl);
+                if (previousVisit != null) {
+                    previousVisit.updateDuration(currentTime);
+                    previousVisit.setActive(false);
+                    // Final upload for previous URL
+                    dbHelper.uploadWebVisitDataByDate(userId, phoneModel, previousVisit)
+                        .addOnSuccessListener(aVoid -> {
+                            Log.d(TAG, "Final data uploaded for previous URL: " + currentUrl);
+                            activeVisits.remove(currentUrl);
+                        });
+                }
+            }
+
+            // Start tracking new URL
+            WebVisitData newVisit = new WebVisitData(url, packageName, currentTime);
+            activeVisits.put(url, newVisit);
+            
+            if (keywordMonitor.isFlaggedContent(url)) {
+                sendNotificationToParent(url);
+            }
+
+            // Upload initial visit data
+            dbHelper.uploadWebVisitDataByDate(userId, phoneModel, newVisit)
+                .addOnSuccessListener(aVoid -> Log.d(TAG, "Initial web visit data uploaded"))
+                .addOnFailureListener(e -> Log.e(TAG, "Failed to upload initial web visit: " + e.getMessage()));
+
+            visitedUrlsCache.put(url, currentTime);
+            currentUrl = url;
+        } else {
+            // Update duration for current URL
+            WebVisitData currentVisit = activeVisits.get(url);
+            if (currentVisit != null) {
+                currentVisit.updateDuration(currentTime);
+                
+                // Periodic updates for long visits
+                if (currentTime - currentVisit.getTimestamp() % UPDATE_INTERVAL < 1000) {
+                    // Use same reference key for updates
+                    dbHelper.uploadWebVisitDataByDate(userId, phoneModel, currentVisit)
+                        .addOnSuccessListener(aVoid -> Log.d(TAG, "Updated duration for: " + url));
+                }
+            }
+        }
+    }
+
+    private void updateActiveVisits(long currentTime) {
+        // Only update current URL if it exists
+        if (currentUrl != null && activeVisits.containsKey(currentUrl)) {
+            WebVisitData visit = activeVisits.get(currentUrl);
+            if (visit.isActive()) {
+                visit.updateDuration(currentTime);
+            }
+        }
+    }
+
+    private void sendNotificationToParent(String flaggedUrl) {
+        String parentToken = keywordMonitor.getParentDeviceToken();
+        if (parentToken != null) {
+            DatabaseReference fcmRef = FirebaseDatabase.getInstance().getReference("notifications").child(userId);
+            
+            Map<String, Object> notification = new HashMap<>();
+            notification.put("title", "Flagged Content Alert");
+            notification.put("body", "Child attempted to visit: " + flaggedUrl);
+            notification.put("timestamp", System.currentTimeMillis());
+            notification.put("deviceToken", parentToken);
+            
+            fcmRef.push().setValue(notification);
         }
     }
 
@@ -155,5 +221,18 @@ public class WebMonitor extends AccessibilityService {
     @Override
     public void onInterrupt() {
         Log.d(TAG, "WebMonitor interrupted");
+    }
+
+    @Override
+    public void onDestroy() {
+        if (currentUrl != null) {
+            WebVisitData visit = activeVisits.get(currentUrl);
+            if (visit != null) {
+                visit.updateDuration(System.currentTimeMillis());
+                visit.setActive(false);
+                dbHelper.uploadWebVisitDataByDate(userId, phoneModel, visit);
+            }
+        }
+        super.onDestroy();
     }
 }

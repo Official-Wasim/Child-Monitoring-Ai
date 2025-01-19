@@ -420,8 +420,7 @@ public class CommandExecutor {
                         new FirebaseStorageHelper.AudioCallback() {
                             @Override
                             public void onSuccess(String downloadUrl) {
-                                updateCommandStatus(date, timestamp, "completed", 
-                                    "Audio recorded and uploaded successfully: " + downloadUrl);
+                                updateCommandStatus(date, timestamp, "completed", downloadUrl);
                             }
 
                             @Override

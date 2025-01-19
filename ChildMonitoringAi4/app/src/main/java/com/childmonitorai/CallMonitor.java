@@ -6,10 +6,12 @@ import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.CallLog;
+import android.provider.ContactsContract;
 import android.util.Log;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+
 public class CallMonitor {
     private static final String TAG = "CallMonitor";
     private String userId;
@@ -81,9 +83,12 @@ public class CallMonitor {
                         long timestamp = cursor.getLong(callDateColumnIndex);
                         String callDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date(timestamp));
 
+                        String contactName = getContactName(phoneNumber); // Fetch contact name
+
                         if (timestamp >= installationDate) { // Check if call log is from the date of installation
                             CallData callData = new CallData(phoneNumber, callType, callDuration, callDate);
                             callData.setTimestamp(timestamp);
+                            callData.setContactName(contactName); // Set contact name
 
                             // Generate a unique ID based on phone number and timestamp
                             String uniqueCallId = generateUniqueId(phoneNumber, timestamp);
@@ -104,6 +109,19 @@ public class CallMonitor {
                 cursor.close();
             }
         }
+    }
+
+    private String getContactName(String phoneNumber) {
+        String contactName = null;
+        Uri uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(phoneNumber));
+        Cursor cursor = context.getContentResolver().query(uri, new String[]{ContactsContract.PhoneLookup.DISPLAY_NAME}, null, null, null);
+        if (cursor != null) {
+            if (cursor.moveToFirst()) {
+                contactName = cursor.getString(cursor.getColumnIndex(ContactsContract.PhoneLookup.DISPLAY_NAME));
+            }
+            cursor.close();
+        }
+        return contactName;
     }
 
     private String generateUniqueId(String phoneNumber, long timestamp) {

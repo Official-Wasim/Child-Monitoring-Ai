@@ -22,6 +22,11 @@ import com.google.firebase.database.FirebaseDatabase;
 import android.app.Activity;
 import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
+import android.app.usage.UsageStats;
+import android.app.usage.UsageStatsManager;
+
+import java.util.Calendar;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -282,5 +287,35 @@ public class MainActivity extends AppCompatActivity {
                 PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP);
         pm.setComponentEnabledSetting(thisComponent,
                 PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (!checkUsageStatsPermission()) {
+            showUsageAccessDialog();
+        }
+    }
+
+    private boolean checkUsageStatsPermission() {
+        UsageStatsManager usageStatsManager = (UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
+        Calendar calendar = Calendar.getInstance();
+        calendar.add(Calendar.YEAR, -1);
+        final long start = calendar.getTimeInMillis();
+        final long end = System.currentTimeMillis();
+        final List<UsageStats> stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, start, end);
+        return stats != null && !stats.isEmpty();
+    }
+
+    private void showUsageAccessDialog() {
+        new AlertDialog.Builder(this)
+            .setTitle("Usage Access Required")
+            .setMessage("Please enable usage access for app monitoring.")
+            .setPositiveButton("Open Settings", (dialog, which) -> {
+                Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+                startActivity(intent);
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
     }
 }

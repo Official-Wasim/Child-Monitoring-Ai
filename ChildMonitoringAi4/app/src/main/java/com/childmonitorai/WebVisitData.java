@@ -1,6 +1,5 @@
 package com.childmonitorai;
 
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -8,59 +7,36 @@ import java.util.Locale;
 public class WebVisitData {
     private String url;
     private String title;
-    private long timestamp; // Use long for timestamp
-    private Date date;
+    private String packageName;
+    private long timestamp;
+    private long duration;
+    private boolean active;
+    private String databaseKey;
+    private String date;
 
-    private static final SimpleDateFormat TIMESTAMP_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
-
-    public WebVisitData(String url, String title, long timestamp) {
+    public WebVisitData(String url, String packageName, long timestamp) {
         this.url = url;
-        this.title = (title == null || title.isEmpty()) ? "Untitled" : title;  // Default title if null or empty
+        this.packageName = packageName;
         this.timestamp = timestamp;
-        this.date = new Date(timestamp); // Convert timestamp to Date
+        this.duration = 0;
+        this.active = true;
+        this.date = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date(timestamp));
     }
 
-    // Getters and setters
-    public String getUrl() {
-        return url;
-    }
+    public String getUrl() { return url; }
+    public String getTitle() { return title; }
+    public String getPackageName() { return packageName; }
+    public long getTimestamp() { return timestamp; }
+    public long getDuration() { return duration; }
+    public boolean isActive() { return active; }
+    public String getDatabaseKey() { return databaseKey; }
+    public String getDate() { return date; }
 
-    public void setUrl(String url) {
-        this.url = url;
-    }
+    public void setTitle(String title) { this.title = title; }
+    public void setActive(boolean active) { this.active = active; }
+    public void setDatabaseKey(String key) { this.databaseKey = key; }
 
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public long getTimestamp() {
-        return timestamp;
-    }
-
-    public void setTimestamp(long timestamp) {
-        this.timestamp = timestamp;
-        this.date = new Date(timestamp); // Update date when timestamp is updated
-    }
-
-    public Date getDate() {
-        return date;
-    }
-
-    public void setDate(Date date) {
-        this.date = date;
-    }
-
-    @Override
-    public String toString() {
-        return "WebVisitData{" +
-                "url='" + url + '\'' +
-                ", title='" + title + '\'' +
-                ", timestamp=" + timestamp +
-                ", date=" + (date != null ? date.toString() : "null") +
-                '}';
+    public void updateDuration(long currentTime) {
+        this.duration = currentTime - timestamp;
     }
 }

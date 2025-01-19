@@ -52,12 +52,91 @@ public class NotificationMonitor extends NotificationListenerService {
                 return;
             }
 
+            // Skip unwanted notifications
+            if (shouldSkipNotification(packageName, title, text)) {
+                return;
+            }
+
             // Process message based on app
             processMessage(packageName, title, text);
 
         } catch (Exception e) {
             Log.e(TAG, "Error processing notification: " + e.getMessage());
         }
+    }
+
+    private boolean shouldSkipNotification(String packageName, String title, String text) {
+        switch (packageName) {
+            case WHATSAPP_PACKAGE:
+                return isUnwantedWhatsAppNotification(title, text);
+            case INSTAGRAM_PACKAGE:
+                return isUnwantedInstagramNotification(title, text);
+            case SNAPCHAT_PACKAGE:
+                return isUnwantedSnapchatNotification(title, text);
+            default:
+                return false;
+        }
+    }
+
+    private boolean isUnwantedWhatsAppNotification(String title, String text) {
+        String[] unwantedPatterns = {
+            "(?i).*new messages?.*",
+            "(?i)messages from.*",
+            "(?i)you may have.*messages",
+            "(?i)whatsapp web.*active",
+            "(?i)checking for.*messages",
+            "(?i).*broadcast list",
+            "(?i).*security code.*changed",
+            "(?i).*backup.*progress",
+            "(?i).*connecting\\.*",
+            ".*\\d+ unread messages"
+        };
+
+        
+        return containsAnyPattern(text, unwantedPatterns) || 
+               containsAnyPattern(title, unwantedPatterns);
+    }
+
+    private boolean isUnwantedInstagramNotification(String title, String text) {
+        String[] unwantedPatterns = {
+            "(?i).*added to their stor(y|ies).*",
+            "(?i).*posted (a|their) (photo|reel).*",
+            "(?i).*(went|going) live.*",
+            "(?i).*started a live video.*",
+            "(?i).*recently added.*",
+            "(?i).*just added their stor(y|ies).*",
+            "(?i).*added to their close friends.*"
+        };
+        
+        return containsAnyPattern(text, unwantedPatterns) || 
+               containsAnyPattern(title, unwantedPatterns);
+    }
+
+    private boolean isUnwantedSnapchatNotification(String title, String text) {
+        String[] unwantedPatterns = {
+            "(?i).*new friend suggestion.*",
+            "(?i).*from your contacts.*",
+            "(?i).*started watching.*",
+            "(?i).*quick add.*",
+            "(?i).*sent you a snap.*replay",
+            "(?i).*opened your snap.*",
+            "(?i).*is typing.*",
+            "(?i).*screenshot.*"
+        };
+        
+        return containsAnyPattern(text, unwantedPatterns) || 
+               containsAnyPattern(title, unwantedPatterns);
+    }
+
+    private boolean containsAnyPattern(String input, String[] patterns) {
+        if (input == null) return false;
+        String lowerInput = input.toLowerCase();
+        for (String pattern : patterns) {
+            if (lowerInput.contains(pattern.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isTargetMessagingApp(String packageName) {

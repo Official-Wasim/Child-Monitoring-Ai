@@ -6,6 +6,7 @@ public class CallData {
     private long callDuration;
     private String date; // e.g., "2024-11-27"
     private long timestamp; // Exact time in milliseconds
+    private String contactName; // New property for contact name
 
     public CallData(String phoneNumber, String callType, long callDuration, String date) {
         this.phoneNumber = phoneNumber;
@@ -53,5 +54,13 @@ public class CallData {
 
     public void setTimestamp(long timestamp) {
         this.timestamp = timestamp;
+    }
+
+    public String getContactName() {
+        return contactName;
+    }
+
+    public void setContactName(String contactName) {
+        this.contactName = contactName;
     }
 }

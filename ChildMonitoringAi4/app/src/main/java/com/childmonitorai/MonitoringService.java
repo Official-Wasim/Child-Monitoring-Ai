@@ -26,7 +26,7 @@ public class MonitoringService extends Service {
     private CommandListener commandListener; 
     private CommandExecutor commandExecutor;
     private String userId;
-    private String phoneModel; // using phoneModel as deviceId
+    private String phoneModel; 
 
     @Override
     public void onCreate() {
@@ -52,9 +52,7 @@ public class MonitoringService extends Service {
         createNotificationChannel();
         startForeground();
         
-        // Initialize command executor with valid context
         initCommandExecutor();
-        
         startMonitoringService();
         return START_STICKY;
     }

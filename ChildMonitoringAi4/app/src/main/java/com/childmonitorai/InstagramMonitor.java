@@ -1,4 +1,6 @@
 package com.childmonitorai;
+import com.childmonitorai.models.MessageData;
+
 
 import android.graphics.Rect;
 import android.util.DisplayMetrics;

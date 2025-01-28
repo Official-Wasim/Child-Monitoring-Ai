@@ -1,4 +1,6 @@
 package com.childmonitorai;
+import com.childmonitorai.models.MessageData;
+
 
 import android.graphics.Rect;
 import android.util.DisplayMetrics;
@@ -15,7 +17,6 @@ import java.util.Set;
 public class TelegramMonitor {
     private static final String TAG = "TelegramMonitor";
     public static final String TELEGRAM_PACKAGE = "org.telegram.messenger";
-    // Add alternative package names
     private static final String[] TELEGRAM_PACKAGES = {
         "org.telegram.messenger",
         "org.telegram.messenger.web",

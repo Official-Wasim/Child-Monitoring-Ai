@@ -1,8 +1,8 @@
 package com.childmonitorai;
+import com.childmonitorai.models.AppUsageData;
 
 import android.app.Service;
 import android.app.usage.UsageEvents;
-import android.app.usage.UsageStats;
 import android.app.usage.UsageStatsManager;
 import android.content.Context;
 import android.content.Intent;
@@ -16,6 +16,8 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.os.Build;
 import androidx.core.app.NotificationCompat;
+
+import com.childmonitorai.models.AppUsageData;
 
 import java.util.HashMap;
 import java.util.Map;

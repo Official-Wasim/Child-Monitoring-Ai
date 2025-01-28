@@ -1,4 +1,6 @@
 package com.childmonitorai;
+import com.childmonitorai.models.ContactData;
+
 
 import android.content.Context;
 import android.database.Cursor;

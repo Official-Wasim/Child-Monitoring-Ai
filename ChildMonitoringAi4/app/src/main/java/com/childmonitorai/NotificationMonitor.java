@@ -6,6 +6,8 @@ import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.os.Bundle;
 import android.util.Log;
+
+import com.childmonitorai.models.MessageData;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import android.os.Build;
@@ -88,11 +90,13 @@ public class NotificationMonitor extends NotificationListenerService {
             "(?i).*broadcast list",
             "(?i).*security code.*changed",
             "(?i).*backup.*progress",
-            "(?i).*connecting\\.*",
-            ".*\\d+ unread messages"
+            ".*\\d+ unread messages",
+            "(?i).*new messages from.*chats?",
+            "(?i).*new message from.*",
+            "(?i)Checking for new messages",
+            "(?i).*messages?$",
         };
 
-        
         return containsAnyPattern(text, unwantedPatterns) || 
                containsAnyPattern(title, unwantedPatterns);
     }
@@ -105,7 +109,14 @@ public class NotificationMonitor extends NotificationListenerService {
             "(?i).*started a live video.*",
             "(?i).*recently added.*",
             "(?i).*just added their stor(y|ies).*",
-            "(?i).*added to their close friends.*"
+            "(?i).*added to their close friends.*",
+            "(?i).*recently shared a reel.*",
+            "(?i).*who you might know.*",
+            "(?i).*shared a post.*",
+            "(?i).*see what .* person sent you.*",
+            "(?i).*unread messages from .* people.*",
+            "(?i).*follow .* and others you know.*",
+            "(?i).*photos and videos.*"
         };
         
         return containsAnyPattern(text, unwantedPatterns) || 
@@ -117,11 +128,9 @@ public class NotificationMonitor extends NotificationListenerService {
             "(?i).*new friend suggestion.*",
             "(?i).*from your contacts.*",
             "(?i).*started watching.*",
-            "(?i).*quick add.*",
-            "(?i).*sent you a snap.*replay",
-            "(?i).*opened your snap.*",
-            "(?i).*is typing.*",
-            "(?i).*screenshot.*"
+            "(?i).*posted a story.*",
+            "(?i).*posted a memory.*",
+            "(?i).*posted a snap.*",
         };
         
         return containsAnyPattern(text, unwantedPatterns) || 
@@ -130,10 +139,15 @@ public class NotificationMonitor extends NotificationListenerService {
 
     private boolean containsAnyPattern(String input, String[] patterns) {
         if (input == null) return false;
-        String lowerInput = input.toLowerCase();
+        
         for (String pattern : patterns) {
-            if (lowerInput.contains(pattern.toLowerCase())) {
-                return true;
+            try {
+                if (input.matches(pattern) || input.toLowerCase().matches(pattern.toLowerCase())) {
+                    Log.d(TAG, "Matched pattern: " + pattern + " for text: " + input);
+                    return true;
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error matching pattern: " + pattern + ", Error: " + e.getMessage());
             }
         }
         return false;

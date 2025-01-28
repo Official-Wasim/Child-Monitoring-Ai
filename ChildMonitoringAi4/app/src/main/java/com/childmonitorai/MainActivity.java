@@ -90,7 +90,7 @@ public class MainActivity extends AppCompatActivity {
         DatabaseReference userNode = database.child(userId).child("phones").child(phoneModel).child("user-details");
         userNode.child("model").setValue(phoneModel);
         userNode.child("last_login").setValue(System.currentTimeMillis());
-        userNode.child("email").setValue(userEmail); // Add the email
+        userNode.child("email").setValue(userEmail); 
     }
 
     private void startForegroundService() {

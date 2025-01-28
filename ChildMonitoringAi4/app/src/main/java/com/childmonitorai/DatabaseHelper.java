@@ -1,20 +1,27 @@
 package com.childmonitorai;
+import com.childmonitorai.models.CallData;
+import com.childmonitorai.models.ClipboardData;
+import com.childmonitorai.models.ContactData;
+import com.childmonitorai.models.MessageData;
+import com.childmonitorai.models.MMSData;
+import com.childmonitorai.models.SMSData;
+import com.childmonitorai.models.WebVisitData;
+import com.childmonitorai.models.AppUsageData;
+
+
+
 
 import static android.content.ContentValues.TAG;
-
 import android.util.Log;
 
-import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.android.gms.tasks.Task;
-
 import java.util.Date;
 import java.util.Locale;
 import java.text.SimpleDateFormat;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 public class DatabaseHelper {
 
@@ -186,8 +193,8 @@ public class DatabaseHelper {
     }
 
     public void uploadAppUsageDataByDate(String userId, String phoneModel, AppUsageData appUsageData) {
-        if (appUsageData.getUsageDuration() == 0) {
-            return; // Skip if no usage
+        if (appUsageData.getUsageDuration() == 0 && appUsageData.getLaunchCount() == 0) {
+            return; // Skip if no usage data
         }
 
         String sanitizedPackageName = sanitizePath(appUsageData.getPackageName());
@@ -200,8 +207,6 @@ public class DatabaseHelper {
                 .child(date)
                 .child(sanitizedPackageName);
 
-        Log.d("DatabaseHelper", "Uploading usage data for: " + appUsageData.getPackageName());
-
         Map<String, Object> usageMap = new HashMap<>();
         usageMap.put("package_name", appUsageData.getPackageName());
         usageMap.put("app_name", appUsageData.getAppName());
@@ -210,11 +215,26 @@ public class DatabaseHelper {
         usageMap.put("last_used", appUsageData.getLastTimeUsed());
         usageMap.put("timestamp", System.currentTimeMillis());
 
-        usageRef.setValue(usageMap)
-                .addOnSuccessListener(aVoid -> 
-                    Log.d("DatabaseHelper", "Successfully uploaded usage data for " + appUsageData.getPackageName()))
-                .addOnFailureListener(e -> 
-                    Log.e("DatabaseHelper", "Failed to upload usage data: " + e.getMessage()));
+        // First check if there's existing data for today
+        usageRef.get().addOnCompleteListener(task -> {
+            if (task.isSuccessful()) {
+                Map<String, Object> existingData = (Map<String, Object>) task.getResult().getValue();
+                if (existingData != null) {
+                    // Accumulate usage data
+                    long existingDuration = (long) existingData.get("usage_duration");
+                    long existingLaunches = (long) existingData.get("launch_count");
+                    usageMap.put("usage_duration", existingDuration + appUsageData.getUsageDuration());
+                    usageMap.put("launch_count", existingLaunches + appUsageData.getLaunchCount());
+                }
+                
+                // Upload updated data
+                usageRef.setValue(usageMap)
+                        .addOnSuccessListener(aVoid -> 
+                            Log.d(TAG, "Successfully uploaded usage data for " + appUsageData.getPackageName()))
+                        .addOnFailureListener(e -> 
+                            Log.e(TAG, "Failed to upload usage data: " + e.getMessage()));
+            }
+        });
     }
 
     public static void uploadClipboardDataByDate(String userId, String phoneModel, ClipboardData clipboardData) {

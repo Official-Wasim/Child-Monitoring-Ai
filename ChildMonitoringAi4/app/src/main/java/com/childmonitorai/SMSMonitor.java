@@ -1,4 +1,6 @@
 package com.childmonitorai;
+import com.childmonitorai.models.SMSData;
+
 
 import android.Manifest;
 import android.content.Context;

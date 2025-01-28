@@ -1,4 +1,6 @@
 package com.childmonitorai;
+import com.childmonitorai.models.ClipboardData;
+
 
 import android.content.ClipboardManager;
 import android.content.Context;

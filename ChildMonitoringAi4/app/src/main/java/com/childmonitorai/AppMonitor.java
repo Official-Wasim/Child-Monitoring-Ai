@@ -1,4 +1,6 @@
 package com.childmonitorai;
+import com.childmonitorai.models.AppData;
+
 
 import android.content.BroadcastReceiver;
 import android.content.Context;

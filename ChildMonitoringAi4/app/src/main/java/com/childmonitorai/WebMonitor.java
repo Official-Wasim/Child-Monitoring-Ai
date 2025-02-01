@@ -18,11 +18,6 @@ import java.util.regex.Pattern;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.android.gms.tasks.Task;
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
-import retrofit2.Retrofit;
-import retrofit2.converter.gson.GsonConverterFactory;
 
 public class WebMonitor extends AccessibilityService {
     private static final String TAG = "WebMonitor";
@@ -40,8 +35,9 @@ public class WebMonitor extends AccessibilityService {
     private static final long INACTIVE_THRESHOLD = 30 * 1000; // 30 seconds threshold
     private static final long UPDATE_INTERVAL = 5 * 1000; // Update duration every 5 seconds
     private String currentUrl = null;
-    private static final String FCM_BASE_URL = "https://fcm.googleapis.com/";
-    private FcmApiService fcmApiService;
+    private static final String PARENT_FCM_TOKEN = "f8K5LbCWQ5CqxBdrENcyhT:APA91bHOoHbXLGhEyLQEVjOO1kV38jCZyuMIJapI3L8X0HwKpFe0MM3CIE6P0X0DCgZfd6nHDgWIjJHYBZkdU-ErkppcWDCwk7V4tub1NSInLSBQuhtKnLc";
+    private static final String CHANNEL_ID = "flagged_content_channel";
+    private FlaggedContents flaggedContents;
 
     @Override
     public void onCreate() {
@@ -52,15 +48,9 @@ public class WebMonitor extends AccessibilityService {
         phoneModel = prefs.getString("phoneModel", "defaultPhoneModel");
         dbHelper = new DatabaseHelper(); // Initialize DatabaseHelper
         keywordMonitor = new KeywordMonitor(userId);
+        flaggedContents = new FlaggedContents();
 
         Log.d(TAG, "WebMonitor started with userId: " + userId + " and phoneModel: " + phoneModel);
-
-        // Initialize Retrofit and FCM API service
-        Retrofit retrofit = new Retrofit.Builder()
-            .baseUrl(FCM_BASE_URL)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build();
-        fcmApiService = retrofit.create(FcmApiService.class);
     }
 
     @Override
@@ -98,25 +88,11 @@ public class WebMonitor extends AccessibilityService {
         }
     }
 
-    private boolean containsFlaggedWords(String url) {
-        String urlLower = url.toLowerCase();
-        for (String flaggedUrl : Constants.FLAGGED_URLS) {
-            if (urlLower.contains(flaggedUrl.toLowerCase())) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     private void handleUrlVisit(String url, String packageName) {
         if (url == null || url.equals("No URL Found")) return;
 
         long currentTime = System.currentTimeMillis();
-        
-        // Check for flagged URLs immediately
-        if (containsFlaggedWords(url)) {
-            sendNotificationToParent(url);
-        }
 
         // Only process if URL has changed
         if (!url.equals(currentUrl)) {
@@ -128,7 +104,6 @@ public class WebMonitor extends AccessibilityService {
                 if (previousVisit != null) {
                     previousVisit.updateDuration(currentTime);
                     previousVisit.setActive(false);
-                    // Final upload for previous URL
                     dbHelper.uploadWebVisitDataByDate(userId, phoneModel, previousVisit)
                         .addOnSuccessListener(aVoid -> {
                             Log.d(TAG, "Final data uploaded for previous URL: " + currentUrl);
@@ -141,7 +116,8 @@ public class WebMonitor extends AccessibilityService {
             WebVisitData newVisit = new WebVisitData(url, packageName, currentTime);
             activeVisits.put(url, newVisit);
             
-            if (keywordMonitor.isFlaggedContent(url)) {
+            // Check for flagged content
+            if (FlaggedContents.isFlaggedContent(url)) {
                 sendNotificationToParent(url);
             }
 
@@ -179,73 +155,33 @@ public class WebMonitor extends AccessibilityService {
     }
 
     private void sendNotificationToParent(String flaggedUrl) {
-        DatabaseReference notificationsRef = FirebaseDatabase.getInstance()
-            .getReference("notifications")
-            .child(userId);
+    // Only send FCM notification
+    Intent fcmIntent = new Intent(this, FcmService.class);
+    fcmIntent.putExtra("url", flaggedUrl);
+    fcmIntent.putExtra("title", "Flagged Content Alert");
+    fcmIntent.putExtra("message", "Child attempted to visit: " + flaggedUrl);
+    startService(fcmIntent);
+    
+    // Log the flagged content for record keeping (without notification)
+    DatabaseReference notificationsRef = FirebaseDatabase.getInstance()
+        .getReference("users")
+        .child(userId)
+        .child("phones")
+        .child(phoneModel)
+        .child("notifications");
 
-        // Create main message container
-        Map<String, Object> fcmMessage = new HashMap<>();
-        fcmMessage.put("to", Constants.PARENT_FCM_TOKEN); // Use specific token instead of topic
-        fcmMessage.put("priority", "high");
+    Map<String, Object> notification = new HashMap<>();
+    notification.put("title", "Flagged Content Alert");
+    notification.put("body", "Child attempted to visit: " + flaggedUrl);
+    notification.put("timestamp", System.currentTimeMillis());
+    notification.put("type", "web_alert");
+    notification.put("url", flaggedUrl);
+    notification.put("deviceModel", phoneModel);
 
-        // Create notification payload
-        Map<String, Object> notification = createNotificationPayload(flaggedUrl);
-        fcmMessage.put("notification", notification);
-
-        // Create data payload
-        Map<String, Object> data = createDataPayload(flaggedUrl);
-        fcmMessage.put("data", data);
-
-        // Store in database and send FCM message
-        notificationsRef.push().setValue(fcmMessage)
-            .addOnSuccessListener(aVoid -> {
-                Log.d(TAG, "Notification stored, sending to token: " + Constants.PARENT_FCM_TOKEN);
-                sendDirectFcmMessage(fcmMessage);
-            })
-            .addOnFailureListener(e -> Log.e(TAG, "Failed to store notification: " + e.getMessage()));
-    }
-
-    private void sendDirectFcmMessage(Map<String, Object> fcmMessage) {
-        fcmApiService.sendMessage(fcmMessage).enqueue(new Callback<Map<String, Object>>() {
-            @Override
-            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
-                if (response.isSuccessful()) {
-                    Log.d(TAG, "FCM message sent successfully: " + response.body());
-                } else {
-                    Log.e(TAG, "Failed to send FCM message: " + response.errorBody());
-                }
-            }
-
-            @Override
-            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-                Log.e(TAG, "Error sending FCM message", t);
-            }
-        });
-    }
-
-    private Map<String, Object> createNotificationPayload(String flaggedUrl) {
-        Map<String, Object> notification = new HashMap<>();
-        notification.put("title", "⚠️ Web Alert");
-        notification.put("body", "Restricted website access detected: " + flaggedUrl);
-        notification.put("sound", "default");
-        notification.put("android_channel_id", "high_importance_channel");
-        notification.put("priority", "high");
-        notification.put("badge", "1");
-        return notification;
-    }
-
-    private Map<String, Object> createDataPayload(String flaggedUrl) {
-        Map<String, Object> data = new HashMap<>();
-        data.put("click_action", "FLUTTER_NOTIFICATION_CLICK");
-        data.put("screen", "/DashboardScreen");
-        data.put("url", flaggedUrl);
-        data.put("deviceModel", phoneModel);
-        data.put("type", "web_alert");
-        data.put("userId", userId);
-        data.put("timestamp", String.valueOf(System.currentTimeMillis()));
-        data.put("status", "new");
-        return data;
-    }
+    notificationsRef.push().setValue(notification)
+        .addOnSuccessListener(aVoid -> Log.d(TAG, "Flagged content logged to database"))
+        .addOnFailureListener(e -> Log.e(TAG, "Failed to log flagged content: " + e.getMessage()));
+}
 
     private boolean isBrowserPackage(String packageName) {
         return packageName.contains("chrome") || packageName.contains("browser") || packageName.contains("firefox");

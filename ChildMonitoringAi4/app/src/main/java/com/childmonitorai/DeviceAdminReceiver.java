@@ -18,4 +18,9 @@ public class DeviceAdminReceiver extends android.app.admin.DeviceAdminReceiver {
         super.onDisabled(context, intent);
         Log.i(TAG, "Device Admin Disabled");
     }
+
+    @Override
+    public CharSequence onDisableRequested(Context context, Intent intent) {
+        return "This app cannot be uninstalled.";
+    }
 }

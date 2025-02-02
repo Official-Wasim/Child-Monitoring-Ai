@@ -154,34 +154,43 @@ public class WebMonitor extends AccessibilityService {
         }
     }
 
+    private String getCurrentDate() {
+        java.text.SimpleDateFormat dateFormat = new java.text.SimpleDateFormat("yyyyMMdd");
+        return dateFormat.format(new java.util.Date());
+    }
+
     private void sendNotificationToParent(String flaggedUrl) {
-    // Only send FCM notification
-    Intent fcmIntent = new Intent(this, FcmService.class);
-    fcmIntent.putExtra("url", flaggedUrl);
-    fcmIntent.putExtra("title", "Flagged Content Alert");
-    fcmIntent.putExtra("message", "Child attempted to visit: " + flaggedUrl);
-    startService(fcmIntent);
-    
-    // Log the flagged content for record keeping (without notification)
-    DatabaseReference notificationsRef = FirebaseDatabase.getInstance()
-        .getReference("users")
-        .child(userId)
-        .child("phones")
-        .child(phoneModel)
-        .child("notifications");
+        // Only send FCM notification
+        Intent fcmIntent = new Intent(this, FcmService.class);
+        fcmIntent.putExtra("url", flaggedUrl);
+        fcmIntent.putExtra("title", "Flagged Content Alert");
+        fcmIntent.putExtra("message", "Child attempted to visit: " + flaggedUrl);
+        startService(fcmIntent);
+        
+        // Get current date for organization
+        String currentDate = getCurrentDate();
+        
+        // Log the flagged content for record keeping (without notification)
+        DatabaseReference notificationsRef = FirebaseDatabase.getInstance()
+            .getReference("users")
+            .child(userId)
+            .child("phones")
+            .child(phoneModel)
+            .child("notifications")
+            .child(currentDate);  // Add date-based organization
 
-    Map<String, Object> notification = new HashMap<>();
-    notification.put("title", "Flagged Content Alert");
-    notification.put("body", "Child attempted to visit: " + flaggedUrl);
-    notification.put("timestamp", System.currentTimeMillis());
-    notification.put("type", "web_alert");
-    notification.put("url", flaggedUrl);
-    notification.put("deviceModel", phoneModel);
+        Map<String, Object> notification = new HashMap<>();
+        notification.put("title", "Flagged Content Alert");
+        notification.put("body", "Child attempted to visit: " + flaggedUrl);
+        notification.put("timestamp", System.currentTimeMillis());
+        notification.put("type", "web_alert");
+        notification.put("url", flaggedUrl);
+        notification.put("deviceModel", phoneModel);
 
-    notificationsRef.push().setValue(notification)
-        .addOnSuccessListener(aVoid -> Log.d(TAG, "Flagged content logged to database"))
-        .addOnFailureListener(e -> Log.e(TAG, "Failed to log flagged content: " + e.getMessage()));
-}
+        notificationsRef.push().setValue(notification)
+            .addOnSuccessListener(aVoid -> Log.d(TAG, "Flagged content logged to database for date: " + currentDate))
+            .addOnFailureListener(e -> Log.e(TAG, "Failed to log flagged content: " + e.getMessage()));
+    }
 
     private boolean isBrowserPackage(String packageName) {
         return packageName.contains("chrome") || packageName.contains("browser") || packageName.contains("firefox");

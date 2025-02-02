@@ -1,5 +1,6 @@
 package com.childmonitorai;
 
+import android.app.AppOpsManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -17,8 +18,16 @@ import java.net.URISyntaxException;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import androidx.work.Constraints;
+import androidx.work.Data;
+import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.NetworkType;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
 
 import com.google.firebase.auth.FirebaseAuth;
+
+import java.util.concurrent.TimeUnit;
 
 public class MonitoringService extends Service {
     private static final String TAG = "MonitoringService";
@@ -27,6 +36,9 @@ public class MonitoringService extends Service {
     private CommandExecutor commandExecutor;
     private String userId;
     private String phoneModel; 
+    private GeoFenceMonitor geoFenceMonitor;
+    private AppMonitor appMonitor;  // Add this field
+    private PhotosMonitor photosMonitor;  // Add this field
 
     @Override
     public void onCreate() {
@@ -75,7 +87,7 @@ public class MonitoringService extends Service {
             FirebaseAuth auth = FirebaseAuth.getInstance();
             if (auth.getCurrentUser() == null) {
                 Log.e(TAG, "No user logged in.");
-                stopSelf(); // Stop service if no user is logged in
+                stopSelf();
                 return;
             }
 
@@ -103,12 +115,11 @@ public class MonitoringService extends Service {
             startContactMonitor(userId, phoneModel);
             startAppMonitor(userId, phoneModel);
             startWebMonitor(userId, phoneModel);
+            startClipboardMonitor(userId, phoneModel);
             startAppUsageMonitor(userId, phoneModel);
-            startClipboardMonitor(userId, phoneModel); 
-            initializeCommandListener(userId, phoneModel); 
-            //startScreenshotMonitor(userId, phoneModel); // Initialize ScreenshotMonitor
-
-
+            startGeofenceMonitor(); // Add this line
+            startPhotosMonitor(); // Add this line
+            initializeCommandListener(userId, phoneModel);
         } catch (Exception e) {
             Log.e(TAG, "Error starting monitors: " + e.getMessage());
         }
@@ -162,13 +173,55 @@ public class MonitoringService extends Service {
 
     private void startAppMonitor(String userId, String phoneModel) {
         Log.d(TAG, "Initializing App Monitor");
-        AppMonitor appMonitor = new AppMonitor(this, userId, phoneModel);
-        appMonitor.startMonitoring();
+        try {
+            appMonitor = new AppMonitor(this, userId, phoneModel);
+            appMonitor.startMonitoring();
+            Log.i(TAG, "App Monitor initialized successfully");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to initialize App Monitor: " + e.getMessage());
+        }
     }
 
     private void startAppUsageMonitor(String userId, String phoneModel) {
         Log.d(TAG, "Initializing App Usage Monitor");
 
+        // Check for usage stats permission
+        AppOpsManager appOps = (AppOpsManager) getSystemService(Context.APP_OPS_SERVICE);
+        int mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(), getPackageName());
+
+        if (mode != AppOpsManager.MODE_ALLOWED) {
+            Log.w(TAG, "Usage stats permission not granted");
+            // You might want to handle this case, perhaps by showing a permission request
+            return;
+        }
+
+        // Create Data object with required parameters
+        Data inputData = new Data.Builder()
+                .putString("userId", userId)
+                .putString("phoneModel", phoneModel)
+                .build();
+
+        // Schedule periodic work using WorkManager with input data
+        Constraints constraints = new Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build();
+
+        PeriodicWorkRequest usageWorkRequest = 
+            new PeriodicWorkRequest.Builder(UsageTrackingWorker.class, 15, TimeUnit.MINUTES)
+                .setConstraints(constraints)
+                .setInputData(inputData)  // Make sure input data is set
+                .addTag("usage_tracking")
+                .build();
+
+        WorkManager.getInstance(this)
+                .enqueueUniquePeriodicWork(
+                    "usage_tracking_" + userId,  // Make work request unique per user
+                    ExistingPeriodicWorkPolicy.UPDATE,  // Update existing work if any
+                    usageWorkRequest
+                );
+
+        // Start the AppUsageService with the same parameters
         Intent serviceIntent = new Intent(this, AppUsageService.class);
         serviceIntent.putExtra("userId", userId);
         serviceIntent.putExtra("phoneModel", phoneModel);
@@ -178,9 +231,29 @@ public class MonitoringService extends Service {
         } else {
             startService(serviceIntent);
         }
-        
-        // Verify service started
-        Log.d(TAG, "App Usage Monitor service started");
+
+        Log.d(TAG, "App Usage Monitor initialized successfully");
+    }
+
+    private void startGeofenceMonitor() {
+        Log.d(TAG, "Initializing Geofence Monitor");
+        geoFenceMonitor = new GeoFenceMonitor(this);
+        if (geoFenceMonitor.hasRequiredPermissions()) {
+            geoFenceMonitor.startGeofencing();
+        } else {
+            Log.w(TAG, "Missing permissions for geofencing");
+            showPermissionActivity();
+        }
+    }
+
+    private void startPhotosMonitor() {
+        Log.d(TAG, "Initializing Photos Monitor");
+        try {
+            photosMonitor = new PhotosMonitor(this);
+            Log.i(TAG, "Photos Monitor initialized successfully");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to initialize Photos Monitor: " + e.getMessage());
+        }
     }
 
     private void initializeCommandListener(String userId, String phoneModel) {

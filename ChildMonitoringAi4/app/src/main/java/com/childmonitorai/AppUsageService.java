@@ -1,5 +1,4 @@
 package com.childmonitorai;
-import com.childmonitorai.models.AppUsageData;
 
 import android.app.Service;
 import android.app.usage.UsageEvents;
@@ -16,54 +15,74 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.os.Build;
 import androidx.core.app.NotificationCompat;
+import androidx.work.Constraints;
+import androidx.work.NetworkType;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
 
 import com.childmonitorai.models.AppUsageData;
+import com.childmonitorai.models.SessionData;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 public class AppUsageService extends Service {
     private static final String TAG = "AppUsageService";
+    private static final long MAX_SESSION_DURATION = TimeUnit.HOURS.toMillis(12);
+    private static final long DUPLICATE_EVENT_THRESHOLD = 500; // ms
+    private static final int MAX_RETRY_ATTEMPTS = 3;
+
     private String userId;
     private String phoneModel;
     private DatabaseHelper databaseHelper;
-    private ScheduledExecutorService scheduler;
     private UsageStatsManager usageStatsManager;
     private Map<String, AppUsageData> appUsageMap;
+    private Map<String, com.childmonitorai.models.SessionData> activeSessions;
+    private volatile boolean isServiceRunning;
 
     @Override
     public void onCreate() {
         super.onCreate();
         databaseHelper = new DatabaseHelper();
-        scheduler = Executors.newScheduledThreadPool(1);
         usageStatsManager = (UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
-        appUsageMap = new HashMap<>();
+        appUsageMap = new ConcurrentHashMap<>();
+        activeSessions = new ConcurrentHashMap<>();
+        isServiceRunning = false;
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null) {
-            userId = intent.getStringExtra("userId");
-            phoneModel = intent.getStringExtra("phoneModel");
-            
-            Log.d(TAG, "Service started for user: " + userId + ", device: " + phoneModel);
-            
-            // Start as foreground service
-            startForeground(2, createNotification());
-            
-            if (checkUsageStatsPermission()) {
-                Log.d(TAG, "Usage stats permission granted, starting tracking");
-                startTracking();
-            } else {
-                Log.e(TAG, "Usage stats permission not granted");
-                stopSelf();
-            }
-        } else {
+        if (intent == null) {
             Log.e(TAG, "Service started with null intent");
+            return START_NOT_STICKY;
         }
+
+        userId = intent.getStringExtra("userId");
+        phoneModel = intent.getStringExtra("phoneModel");
+        
+        if (userId == null || phoneModel == null) {
+            Log.e(TAG, "Missing required parameters");
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+
+        Log.d(TAG, "Service started for user: " + userId + ", device: " + phoneModel);
+        
+        startForeground(2, createNotification());
+        
+        if (!checkUsageStatsPermission()) {
+            Log.e(TAG, "Usage stats permission not granted");
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+
+        // Schedule periodic work using WorkManager
+        scheduleUsageTracking();
+        
+        isServiceRunning = true;
         return START_STICKY;
     }
 
@@ -87,30 +106,25 @@ public class AppUsageService extends Service {
                 .build();
     }
 
-    private void startTracking() {
-        Log.d(TAG, "Starting usage tracking scheduler");
-        scheduler.scheduleAtFixedRate(() -> {
-            try {
-                long endTime = System.currentTimeMillis();
-                long startTime = endTime - (60 * 1000); // Last minute
-                Log.d(TAG, "Querying usage stats from " + startTime + " to " + endTime);
+    private void scheduleUsageTracking() {
+        Constraints constraints = new Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build();
 
-                UsageEvents events = usageStatsManager.queryEvents(startTime, endTime);
-                if (events == null) {
-                    Log.e(TAG, "Failed to query usage events");
-                    return;
-                }
+        PeriodicWorkRequest trackingWork = 
+            new PeriodicWorkRequest.Builder(UsageTrackingWorker.class, 15, TimeUnit.MINUTES)
+                .setConstraints(constraints)
+                .setInitialDelay(1, TimeUnit.MINUTES)
+                .addTag("usage_tracking")
+                .build();
 
-                processUsageEvents(events);
-                uploadUsageData();
-                
-            } catch (Exception e) {
-                Log.e(TAG, "Error in usage tracking: " + e.getMessage(), e);
-            }
-        }, 0, 1, TimeUnit.MINUTES);
+        WorkManager.getInstance(this)
+                .enqueue(trackingWork);
     }
 
     private void processUsageEvents(UsageEvents events) {
+        if (events == null) return;
+
         UsageEvents.Event event = new UsageEvents.Event();
         Map<String, Long> lastEventTimeMap = new HashMap<>();
         int eventCount = 0;
@@ -120,58 +134,228 @@ public class AppUsageService extends Service {
             eventCount++;
             
             String packageName = event.getPackageName();
-            if (isSystemApp(packageName)) {
-                Log.v(TAG, "Skipping system app: " + packageName);
-                continue;
-            }
+            if (isSystemApp(packageName)) continue;
 
-            AppUsageData usageData = appUsageMap.computeIfAbsent(packageName, k -> {
+            if (isDuplicateEvent(lastEventTimeMap, event)) continue;
+
+            AppUsageData usageData = getOrCreateAppUsageData(packageName);
+            handleUsageEvent(event, usageData);
+        }
+        
+        Log.d(TAG, "Processed " + eventCount + " events");
+    }
+
+    private AppUsageData getOrCreateAppUsageData(String packageName) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            return appUsageMap.computeIfAbsent(packageName, k -> {
                 String appName = getAppName(k);
                 Log.d(TAG, "New app detected: " + appName + " (" + k + ")");
                 return new AppUsageData(k, appName, 0, System.currentTimeMillis());
             });
-
-            // Track last event time to prevent duplicate events
-            Long lastEventTime = lastEventTimeMap.get(packageName);
-            if (lastEventTime != null && event.getTimeStamp() <= lastEventTime) {
-                Log.v(TAG, "Skipping duplicate event for: " + packageName);
-                continue;
-            }
-            lastEventTimeMap.put(packageName, event.getTimeStamp());
-
-            handleUsageEvent(event, usageData);
         }
-        Log.d(TAG, "Processed " + eventCount + " usage events");
+        // Fallback for older Android versions
+        AppUsageData usageData = appUsageMap.get(packageName);
+        if (usageData == null) {
+            String appName = getAppName(packageName);
+            usageData = new AppUsageData(packageName, appName, 0, System.currentTimeMillis());
+            appUsageMap.put(packageName, usageData);
+            Log.d(TAG, "New app detected: " + appName + " (" + packageName + ")");
+        }
+        return usageData;
+    }
+
+    private boolean isDuplicateEvent(Map<String, Long> lastEventTimeMap, UsageEvents.Event event) {
+        String packageName = event.getPackageName();
+        long eventTime = event.getTimeStamp();
+        Long lastEventTime = lastEventTimeMap.get(packageName);
+        
+        if (lastEventTime != null && 
+            eventTime - lastEventTime < DUPLICATE_EVENT_THRESHOLD) {
+            return true;
+        }
+        
+        lastEventTimeMap.put(packageName, eventTime);
+        return false;
     }
 
     private void handleUsageEvent(UsageEvents.Event event, AppUsageData usageData) {
         long eventTime = event.getTimeStamp();
         String packageName = usageData.getPackageName();
-        
-        switch (event.getEventType()) {
-            case UsageEvents.Event.MOVE_TO_FOREGROUND:
-                if (!usageData.isForeground()) {
-                    usageData.setForeground(true);
-                    usageData.setLastForegroundTime(eventTime);
-                    usageData.setLaunchCount(usageData.getLaunchCount() + 1);
-                    usageData.setLastTimeUsed(eventTime);
-                    Log.i(TAG, String.format("App launched: %s (%s) at %d", 
-                        usageData.getAppName(), packageName, eventTime));
-                }
-                break;
 
-            case UsageEvents.Event.MOVE_TO_BACKGROUND:
-                if (usageData.isForeground()) {
-                    long duration = eventTime - usageData.getLastForegroundTime();
-                    if (duration > 0) {
-                        usageData.setUsageDuration(usageData.getUsageDuration() + duration);
-                        Log.i(TAG, String.format("App session ended: %s (%s), duration: %d ms", 
-                            usageData.getAppName(), packageName, duration));
+        try {
+            switch (event.getEventType()) {
+                case UsageEvents.Event.MOVE_TO_FOREGROUND:
+                    handleForegroundEvent(usageData, eventTime);
+                    // Update additional stats
+                    usageData.setDayLaunchCount(usageData.getDayLaunchCount() + 1);
+                    if (usageData.getFirstTimeUsed() == 0) {
+                        usageData.setFirstTimeUsed(eventTime);
                     }
-                    usageData.setForeground(false);
-                }
-                break;
+                    usageData.setSystemApp(isSystemApp(packageName));
+                    usageData.setCategory(getAppCategory(packageName));
+                    break;
+
+                case UsageEvents.Event.MOVE_TO_BACKGROUND:
+                    handleBackgroundEvent(usageData, eventTime);
+                    // Update total usage time
+                    long sessionDuration = eventTime - usageData.getLastForegroundTime();
+                    usageData.setDayUsageTime(usageData.getDayUsageTime() + sessionDuration);
+                    usageData.setTotalForegroundTime(usageData.getTotalForegroundTime() + sessionDuration);
+                    break;
+            }
+            usageData.setLastUpdateTime(System.currentTimeMillis());
+        } catch (Exception e) {
+            Log.e(TAG, "Error handling event for " + packageName, e);
         }
+    }
+
+    private String getAppCategory(String packageName) {
+        try {
+            PackageManager pm = getPackageManager();
+            ApplicationInfo ai = pm.getApplicationInfo(packageName, 0);
+            
+            if ((ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0) {
+                return "system";
+            }
+            
+            // Check common categories based on permissions and features
+            if (pm.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) &&
+                pm.checkPermission("android.permission.CAMERA", packageName) == PackageManager.PERMISSION_GRANTED) {
+                return "photography";
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (packageName.contains("game") ||
+                    packageName.contains("gaming") ||
+                    ai.category == ApplicationInfo.CATEGORY_GAME) {
+                    return "game";
+                }
+            }
+
+            if (packageName.contains("browser") || 
+                packageName.contains("chrome") || 
+                packageName.contains("firefox") || 
+                packageName.contains("opera")) {
+                return "browser";
+            }
+            
+            if (packageName.contains("messaging") || 
+                packageName.contains("chat") || 
+                packageName.contains("comm")) {
+                return "communication";
+            }
+            
+            if (packageName.contains("social") || 
+                packageName.contains("facebook") || 
+                packageName.contains("twitter") || 
+                packageName.contains("instagram")) {
+                return "social";
+            }
+            
+            if (packageName.contains("music") || 
+                packageName.contains("audio") || 
+                packageName.contains("player") || 
+                packageName.contains("spotify")) {
+                return "media";
+            }
+
+            return "other";
+        } catch (Exception e) {
+            Log.e(TAG, "Error determining app category for " + packageName + ": " + e.getMessage());
+            return "unknown";
+        }
+    }
+
+    private void handleForegroundEvent(AppUsageData usageData, long eventTime) {
+        if (usageData.isForeground()) {
+            handleBackgroundEvent(usageData, eventTime);
+        }
+
+        usageData.setForeground(true);
+        usageData.setLastForegroundTime(eventTime);
+        usageData.setLaunchCount(usageData.getLaunchCount() + 1);
+        usageData.setLastTimeUsed(eventTime);
+
+        com.childmonitorai.models.SessionData sessionData = new com.childmonitorai.models.SessionData(
+            UUID.randomUUID().toString(),
+            usageData.getPackageName(),
+            usageData.getAppName(),
+            eventTime
+        );
+        activeSessions.put(usageData.getPackageName(), sessionData);
+    }
+
+    private void handleBackgroundEvent(AppUsageData usageData, long eventTime) {
+        if (!usageData.isForeground()) {
+            return;
+        }
+
+        SessionData sessionData = activeSessions.remove(usageData.getPackageName());
+        if (sessionData == null) {
+            Log.w(TAG, "No active session found for: " + usageData.getPackageName());
+            return;
+        }
+
+        long duration = eventTime - usageData.getLastForegroundTime();
+        if (duration <= 0) {
+            Log.w(TAG, "Invalid duration calculated: " + duration);
+            return;
+        }
+
+        if (duration > MAX_SESSION_DURATION) {
+            Log.w(TAG, "Session exceeded maximum duration: " + duration);
+            duration = MAX_SESSION_DURATION;
+        }
+
+        usageData.setUsageDuration(usageData.getUsageDuration() + duration);
+        usageData.setForeground(false);
+
+        sessionData.setEndTime(eventTime);
+        sessionData.setDuration(duration);
+
+        uploadSessionData(sessionData);
+    }
+
+    private void uploadSessionData(SessionData sessionData) {
+        int retryCount = 0;
+        boolean uploaded = false;
+
+        while (!uploaded && retryCount < MAX_RETRY_ATTEMPTS) {
+            try {
+                // Check if the session duration is reasonable
+                if (sessionData.getDuration() > 0 && sessionData.getDuration() <= MAX_SESSION_DURATION) {
+                    databaseHelper.uploadSessionData(userId, phoneModel, sessionData);
+                    uploaded = true;
+                    Log.i(TAG, String.format("Uploaded session for %s: duration=%d ms", 
+                        sessionData.getAppName(), sessionData.getDuration()));
+                } else {
+                    Log.w(TAG, String.format("Skipping invalid session duration for %s: %d ms", 
+                        sessionData.getAppName(), sessionData.getDuration()));
+                    break;
+                }
+            } catch (Exception e) {
+                retryCount++;
+                Log.e(TAG, "Upload attempt " + retryCount + " failed", e);
+                if (retryCount == MAX_RETRY_ATTEMPTS) {
+                    break;
+                }
+                try {
+                    Thread.sleep(1000 * retryCount);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+    }
+
+    private void handleSessionTimeout(SessionData session) {
+        long currentTime = System.currentTimeMillis();
+        session.setEndTime(currentTime);
+        session.setDuration(MAX_SESSION_DURATION);
+        session.setTimedOut(true);
+
+        uploadSessionData(session);
     }
 
     private boolean checkUsageStatsPermission() {
@@ -198,40 +382,6 @@ public class AppUsageService extends Service {
         }
     }
 
-    private void uploadUsageData() {
-        Log.d(TAG, "Starting usage data upload");
-        long currentTime = System.currentTimeMillis();
-        int uploadCount = 0;
-
-        for (AppUsageData usageData : appUsageMap.values()) {
-            // Update duration for apps still in foreground
-            if (usageData.isForeground()) {
-                long additionalDuration = currentTime - usageData.getLastForegroundTime();
-                usageData.setUsageDuration(usageData.getUsageDuration() + additionalDuration);
-                usageData.setLastForegroundTime(currentTime);
-                Log.d(TAG, String.format("Updated ongoing session for %s: +%d ms",
-                    usageData.getAppName(), additionalDuration));
-            }
-
-            // Only upload if there's actual usage
-            if (usageData.getUsageDuration() > 0 || usageData.getLaunchCount() > 0) {
-                try {
-                    databaseHelper.uploadAppUsageDataByDate(userId, phoneModel, usageData);
-                    Log.i(TAG, String.format("Uploaded usage for %s (%s): duration=%d ms, launches=%d",
-                        usageData.getAppName(),
-                        usageData.getPackageName(), 
-                        usageData.getUsageDuration(),
-                        usageData.getLaunchCount()));
-                    uploadCount++;
-                } catch (Exception e) {
-                    Log.e(TAG, "Failed to upload usage data for " + usageData.getPackageName(), e);
-                }
-            }
-        }
-        Log.d(TAG, "Upload complete: processed " + uploadCount + " apps");
-        appUsageMap.clear();
-    }
-
     private String getAppName(String packageName) {
         try {
             PackageManager packageManager = getPackageManager();
@@ -249,9 +399,7 @@ public class AppUsageService extends Service {
 
     @Override
     public void onDestroy() {
+        isServiceRunning = false;
         super.onDestroy();
-        if (scheduler != null) {
-            scheduler.shutdown();
-        }
     }
 }

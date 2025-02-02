@@ -155,5 +155,11 @@
             </intent-filter>
         </receiver>
 
+        <!-- Add GeofenceBroadcastReceiver -->
+        <receiver
+            android:name=".GeofenceBroadcastReceiver"
+            android:enabled="true"
+            android:exported="true"/>
+
     </application>
 </manifest>

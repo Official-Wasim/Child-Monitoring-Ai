@@ -6,6 +6,10 @@ import com.google.firebase.storage.UploadTask;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 public class FirebaseStorageHelper {
     private final FirebaseStorage storage;
@@ -22,6 +26,11 @@ public class FirebaseStorageHelper {
     }
 
     public interface AudioCallback {
+        void onSuccess(String downloadUrl);
+        void onFailure(String error);
+    }
+
+    public interface PhotoCallback {
         void onSuccess(String downloadUrl);
         void onFailure(String error);
     }
@@ -138,5 +147,41 @@ public class FirebaseStorageHelper {
                 callback.onFailure(exception.getMessage());
             }
         });
+    }
+
+    public void uploadPhoto(String userId, String phoneModel, String localPath, PhotoCallback callback) {
+        if (userId == null || phoneModel == null || localPath == null) {
+            if (callback != null) {
+                callback.onFailure("Invalid parameters");
+            }
+            return;
+        }
+
+        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+        String fileName = "photo_" + timestamp + "_" + new File(localPath).getName();
+        String path = String.format("%s/%s/photos/%s", userId, phoneModel, fileName);
+
+        StorageReference storageRef = storage.getReference().child(path);
+        
+        try {
+            byte[] imageData = Files.readAllBytes(Paths.get(localPath));
+            UploadTask uploadTask = storageRef.putBytes(imageData);
+            
+            uploadTask.addOnSuccessListener(taskSnapshot -> {
+                storageRef.getDownloadUrl().addOnSuccessListener(uri -> {
+                    if (callback != null) {
+                        callback.onSuccess(uri.toString());
+                    }
+                });
+            }).addOnFailureListener(exception -> {
+                if (callback != null) {
+                    callback.onFailure(exception.getMessage());
+                }
+            });
+        } catch (IOException e) {
+            if (callback != null) {
+                callback.onFailure("Failed to read image file: " + e.getMessage());
+            }
+        }
     }
 }

@@ -9,8 +9,14 @@ public class AppUsageData {
     private long lastTimeUsed;
     private int launchCount;
     private boolean isForeground;
-    private long screenTime;
     private long lastForegroundTime;
+    private long totalForegroundTime;
+    private String category;
+    private boolean isSystemApp;
+    private long firstTimeUsed;
+    private int dayLaunchCount;
+    private long dayUsageTime;
+    private long lastUpdateTime;
 
     public AppUsageData(String packageName, String appName, long usageDuration, long timestamp) {
         this.packageName = packageName;
@@ -19,7 +25,10 @@ public class AppUsageData {
         this.timestamp = timestamp;
         this.launchCount = 0;
         this.isForeground = false;
-        this.screenTime = 0;
+        this.dayLaunchCount = 0;
+        this.dayUsageTime = 0;
+        this.firstTimeUsed = timestamp;
+        this.lastUpdateTime = timestamp;
     }
 
     public String getPackageName() {
@@ -78,19 +87,67 @@ public class AppUsageData {
         isForeground = foreground;
     }
 
-    public long getScreenTime() {
-        return screenTime;
-    }
-
-    public void setScreenTime(long screenTime) {
-        this.screenTime = screenTime;
-    }
-
     public long getLastForegroundTime() {
         return lastForegroundTime;
     }
 
     public void setLastForegroundTime(long lastForegroundTime) {
         this.lastForegroundTime = lastForegroundTime;
+    }
+
+    public long getTotalForegroundTime() {
+        return totalForegroundTime;
+    }
+
+    public void setTotalForegroundTime(long totalForegroundTime) {
+        this.totalForegroundTime = totalForegroundTime;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public boolean isSystemApp() {
+        return isSystemApp;
+    }
+
+    public void setSystemApp(boolean systemApp) {
+        isSystemApp = systemApp;
+    }
+
+    public long getFirstTimeUsed() {
+        return firstTimeUsed;
+    }
+
+    public void setFirstTimeUsed(long firstTimeUsed) {
+        this.firstTimeUsed = firstTimeUsed;
+    }
+
+    public int getDayLaunchCount() {
+        return dayLaunchCount;
+    }
+
+    public void setDayLaunchCount(int dayLaunchCount) {
+        this.dayLaunchCount = dayLaunchCount;
+    }
+
+    public long getDayUsageTime() {
+        return dayUsageTime;
+    }
+
+    public void setDayUsageTime(long dayUsageTime) {
+        this.dayUsageTime = dayUsageTime;
+    }
+
+    public long getLastUpdateTime() {
+        return lastUpdateTime;
+    }
+
+    public void setLastUpdateTime(long lastUpdateTime) {
+        this.lastUpdateTime = lastUpdateTime;
     }
 }

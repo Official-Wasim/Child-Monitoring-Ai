@@ -11,17 +11,22 @@ public class AppData {
     private long size; // size of the app in bytes
     private String version; // version of the app
     private String category; // Add this field
+    private long firstInstalled;
+    private long lastUpdated;
 
     // No-argument constructor required by Firebase
     public AppData() {}
 
-    public AppData(String appName, String packageName, long timestamp, String status, long size, String version) {
+    public AppData(String appName, String packageName, long timestamp, String status, long size, String version, String category) {
         this.appName = appName;
         this.packageName = packageName;
         this.timestamp = timestamp;
         this.status = status;
         this.size = size;
         this.version = version;
+        this.category = category;
+        this.firstInstalled = timestamp;
+        this.lastUpdated = timestamp;
     }
 
     // Getters and setters
@@ -82,6 +87,22 @@ public class AppData {
         this.category = category;
     }
 
+    public long getFirstInstalled() {
+        return firstInstalled;
+    }
+
+    public void setFirstInstalled(long firstInstalled) {
+        this.firstInstalled = firstInstalled;
+    }
+
+    public long getLastUpdated() {
+        return lastUpdated;
+    }
+
+    public void setLastUpdated(long lastUpdated) {
+        this.lastUpdated = lastUpdated;
+    }
+
     // Method to convert AppData to Map<String, Object> for Firebase
     public Map<String, Object> toMap() {
         Map<String, Object> result = new HashMap<>();
@@ -92,6 +113,8 @@ public class AppData {
         result.put("size", size);
         result.put("version", version);
         result.put("category", category); // Add this line
+        result.put("firstInstalled", firstInstalled);
+        result.put("lastUpdated", lastUpdated);
         return result;
     }
 }

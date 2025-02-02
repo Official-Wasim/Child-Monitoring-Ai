@@ -7,13 +7,15 @@ import com.childmonitorai.models.MMSData;
 import com.childmonitorai.models.SMSData;
 import com.childmonitorai.models.WebVisitData;
 import com.childmonitorai.models.AppUsageData;
-
+import com.childmonitorai.models.SessionData; 
 
 
 
 import static android.content.ContentValues.TAG;
 import android.util.Log;
 
+import com.google.android.gms.tasks.Tasks;
+import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.android.gms.tasks.Task;
@@ -33,7 +35,7 @@ public class DatabaseHelper {
     }
 
     // Helper method to avoid repetition of paths
-    private static DatabaseReference getPhoneDataReference(String userId, String phoneModel, String dataType, String uniqueId, String date) {
+    static DatabaseReference getPhoneDataReference(String userId, String phoneModel, String dataType, String uniqueId, String date) {
         return database.child(userId)
                 .child("phones")
                 .child(phoneModel)
@@ -161,18 +163,52 @@ public class DatabaseHelper {
         });
     }
 
-    // Upload app data
-    public void uploadAppData(String userId, String phoneModel, String uniqueKey, Map<String, Object> appMap) {
-        DatabaseReference appRef = getPhoneDataReference(userId, phoneModel, "apps", uniqueKey, "");
+    public Task<Void> uploadAppData(String userId, String phoneModel, String uniqueKey, Map<String, Object> appMap) {
+        DatabaseReference appRef = database.child(userId)
+                .child("phones")
+                .child(phoneModel)
+                .child("apps")
+                .child(uniqueKey);
 
-        appRef.get().addOnCompleteListener(task -> {
-            if (task.isSuccessful() && !task.getResult().exists()) {
-                appRef.setValue(appMap).addOnSuccessListener(aVoid ->
-                                Log.d("DatabaseHelper", "App data uploaded successfully."))
-                        .addOnFailureListener(e ->
-                                Log.e("DatabaseHelper", "Failed to upload app data: " + e.getMessage()));
-            } 
-        }).addOnFailureListener(e -> Log.e("DatabaseHelper", "Error checking for duplication: " + e.getMessage()));
+        return appRef.get().continueWithTask(task -> {
+            if (task.isSuccessful()) {
+                DataSnapshot snapshot = task.getResult();
+                if (snapshot.exists()) {
+                    Map<String, Object> existingData = (Map<String, Object>) snapshot.getValue();
+                    if (existingData != null) {
+                        String existingStatus = (String) existingData.get("status");
+                        String newStatus = (String) appMap.get("status");
+                        String existingVersion = (String) existingData.get("version");
+                        String newVersion = (String) appMap.get("version");
+
+                        if (existingStatus != null && newStatus != null && 
+                            existingVersion != null && newVersion != null) {
+                            
+                            if (existingStatus.equals(newStatus) && existingVersion.equals(newVersion)) {
+                                return Tasks.forResult(null);
+                            }
+                        }
+                        
+                        appMap.put("lastUpdated", System.currentTimeMillis());
+                        if (existingData.containsKey("firstInstalled")) {
+                            appMap.put("firstInstalled", existingData.get("firstInstalled"));
+                        } else {
+                            appMap.put("firstInstalled", System.currentTimeMillis());
+                        }
+                    } else {
+                        appMap.put("firstInstalled", System.currentTimeMillis());
+                        appMap.put("lastUpdated", System.currentTimeMillis());
+                    }
+                } else {
+                    appMap.put("firstInstalled", System.currentTimeMillis());
+                    appMap.put("lastUpdated", System.currentTimeMillis());
+                }
+                
+                return appRef.setValue(appMap);
+            } else {
+                return Tasks.forException(task.getException());
+            }
+        });
     }
 
     public Task<Void> uploadWebVisitDataByDate(String userId, String phoneModel, WebVisitData visitData) {
@@ -194,11 +230,14 @@ public class DatabaseHelper {
 
     public void uploadAppUsageDataByDate(String userId, String phoneModel, AppUsageData appUsageData) {
         if (appUsageData.getUsageDuration() == 0 && appUsageData.getLaunchCount() == 0) {
-            return; // Skip if no usage data
+            Log.d(TAG, "Skipping upload for " + appUsageData.getPackageName() + " - no usage data");
+            return;
         }
 
         String sanitizedPackageName = sanitizePath(appUsageData.getPackageName());
         String date = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
+
+        Log.d(TAG, "Attempting to upload usage data for " + appUsageData.getPackageName());
 
         DatabaseReference usageRef = database.child(userId)
                 .child("phones")
@@ -213,7 +252,14 @@ public class DatabaseHelper {
         usageMap.put("usage_duration", appUsageData.getUsageDuration());
         usageMap.put("launch_count", appUsageData.getLaunchCount());
         usageMap.put("last_used", appUsageData.getLastTimeUsed());
-        usageMap.put("timestamp", System.currentTimeMillis());
+        usageMap.put("first_time_used", appUsageData.getFirstTimeUsed());
+        usageMap.put("total_foreground_time", appUsageData.getTotalForegroundTime());
+        usageMap.put("day_launch_count", appUsageData.getDayLaunchCount());
+        usageMap.put("day_usage_time", appUsageData.getDayUsageTime());
+        usageMap.put("is_system_app", appUsageData.isSystemApp());
+        usageMap.put("category", appUsageData.getCategory());
+        usageMap.put("last_update_time", System.currentTimeMillis());
+        usageMap.put("timestamp", appUsageData.getTimestamp());
 
         // First check if there's existing data for today
         usageRef.get().addOnCompleteListener(task -> {
@@ -225,14 +271,21 @@ public class DatabaseHelper {
                     long existingLaunches = (long) existingData.get("launch_count");
                     usageMap.put("usage_duration", existingDuration + appUsageData.getUsageDuration());
                     usageMap.put("launch_count", existingLaunches + appUsageData.getLaunchCount());
+                    Log.d(TAG, "Updating existing usage data for " + appUsageData.getPackageName());
+                } else {
+                    Log.d(TAG, "Creating new usage data entry for " + appUsageData.getPackageName());
                 }
                 
-                // Upload updated data
+                // Upload updated data with completion listener
                 usageRef.setValue(usageMap)
-                        .addOnSuccessListener(aVoid -> 
-                            Log.d(TAG, "Successfully uploaded usage data for " + appUsageData.getPackageName()))
-                        .addOnFailureListener(e -> 
-                            Log.e(TAG, "Failed to upload usage data: " + e.getMessage()));
+                        .addOnSuccessListener(aVoid -> {
+                            Log.d(TAG, "Successfully uploaded usage data for " + appUsageData.getPackageName());
+                        })
+                        .addOnFailureListener(e -> {
+                            Log.e(TAG, "Failed to upload usage data for " + appUsageData.getPackageName() + ": " + e.getMessage());
+                        });
+            } else {
+                Log.e(TAG, "Failed to query existing data: " + task.getException().getMessage());
             }
         });
     }
@@ -295,7 +348,87 @@ public class DatabaseHelper {
         }).addOnFailureListener(e -> Log.e("DatabaseHelper", "Error checking for duplication: " + e.getMessage()));
     }
 
+    public void uploadSessionData(String userId, String phoneModel, SessionData sessionData) {
+        String date = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date(sessionData.getStartTime()));
+        String sanitizedPackageName = sanitizePath(sessionData.getPackageName());
+        
+        DatabaseReference sessionRef = database.child(userId)
+                .child("phones")
+                .child(phoneModel)
+                .child("app_sessions")
+                .child(date)
+                .child(sanitizedPackageName)
+                .child(sessionData.getSessionId());
 
+        Map<String, Object> sessionMap = new HashMap<>();
+        sessionMap.put("package_name", sessionData.getPackageName());
+        sessionMap.put("app_name", sessionData.getAppName());
+        sessionMap.put("start_time", sessionData.getStartTime());
+        sessionMap.put("end_time", sessionData.getEndTime());
+        sessionMap.put("duration", sessionData.getDuration());
+        sessionMap.put("timed_out", sessionData.isTimedOut());
+
+        sessionRef.setValue(sessionMap)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Session data uploaded successfully");
+                    // Also update the daily aggregated usage
+                    updateDailyUsage(userId, phoneModel, sessionData);
+                })
+                .addOnFailureListener(e -> 
+                    Log.e(TAG, "Failed to upload session data: " + e.getMessage()));
+    }
+
+    private void updateDailyUsage(String userId, String phoneModel, SessionData sessionData) {
+        String date = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date(sessionData.getStartTime()));
+        String sanitizedPackageName = sanitizePath(sessionData.getPackageName());
+        
+        DatabaseReference dailyRef = database.child(userId)
+                .child("phones")
+                .child(phoneModel)
+                .child("app_usage")
+                .child(date)
+                .child(sanitizedPackageName);
+
+        dailyRef.runTransaction(new com.google.firebase.database.Transaction.Handler() {
+            @Override
+            public com.google.firebase.database.Transaction.Result doTransaction(com.google.firebase.database.MutableData mutableData) {
+                Map<String, Object> current = (Map<String, Object>) mutableData.getValue(Object.class);
+                if (current == null) {
+                    current = new HashMap<>();
+                    current.put("package_name", sessionData.getPackageName());
+                    current.put("app_name", sessionData.getAppName());
+                    current.put("total_duration", sessionData.getDuration());
+                    current.put("session_count", 1L);
+                    current.put("last_used", sessionData.getEndTime());
+                } else {
+                    long totalDuration = current.get("total_duration") instanceof Long ? 
+                        (Long) current.get("total_duration") : 0L;
+                    long sessionCount = current.get("session_count") instanceof Long ? 
+                        (Long) current.get("session_count") : 0L;
+                    
+                    current.put("total_duration", totalDuration + sessionData.getDuration());
+                    current.put("session_count", sessionCount + 1);
+                    
+                    long lastUsed = current.get("last_used") instanceof Long ? 
+                        (Long) current.get("last_used") : 0L;
+                    current.put("last_used", Math.max(lastUsed, sessionData.getEndTime()));
+                }
+                mutableData.setValue(current);
+                return com.google.firebase.database.Transaction.success(mutableData);
+            }
+
+            @Override
+            public void onComplete(com.google.firebase.database.DatabaseError error, 
+                                 boolean committed, 
+                                 com.google.firebase.database.DataSnapshot currentData) {
+                if (error != null) {
+                    Log.e(TAG, "Error updating daily usage: " + error.getMessage());
+                } else {
+                    Log.d(TAG, "Daily usage updated successfully");
+                }
+            }
+        });
+    }
 
     // Helper function to sanitize paths and remove invalid characters
     String sanitizePath(String originalPath) {

@@ -32,4 +32,8 @@ public abstract class BaseContentObserver extends ContentObserver {
     public void unregisterObserver() {
         context.getContentResolver().unregisterContentObserver(this);
     }
+    
+    protected Context getContext() {
+        return context;
+    }
 }

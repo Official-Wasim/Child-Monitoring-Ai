@@ -14,7 +14,6 @@ import java.nio.file.Paths;
 public class FirebaseStorageHelper {
     private final FirebaseStorage storage;
     
-    // Add this callback interface
     public interface ScreenshotCallback {
         void onSuccess(String downloadUrl);
         void onFailure(String error);

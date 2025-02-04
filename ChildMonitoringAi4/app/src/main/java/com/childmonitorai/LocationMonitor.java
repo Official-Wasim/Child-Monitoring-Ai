@@ -138,7 +138,7 @@ public class LocationMonitor {
 
     private void uploadLocationData(Location location) {
         String timestamp = String.valueOf(location.getTime()); // Use timestamp as unique location ID
-        String locationDate = getDateFromTimestamp(timestamp); // Method to convert timestamp to date format (e.g., yyyy-MM-dd)
+        String locationDate = getDateFromTimestamp(timestamp); 
         double latitude = location.getLatitude();
         double longitude = location.getLongitude();
         float accuracy = location.getAccuracy();

@@ -2,6 +2,7 @@ package com.childmonitorai;
 
 import android.app.Service;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.AsyncTask;
 import android.os.IBinder;
 import android.util.Log;
@@ -34,13 +35,18 @@ public class FcmService extends Service {
             String url = intent.getStringExtra("url");
             String title = intent.getStringExtra("title");
             String message = intent.getStringExtra("message");
-            String userId = intent.getStringExtra("userId");
             
+            // Get userId from SharedPreferences first
+            SharedPreferences prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE);
+            String userId = prefs.getString("userId", null);
+            
+            // If not in SharedPreferences, try to get from Firebase Auth
             if (userId == null) {
                 FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
                 if (currentUser != null) {
                     userId = currentUser.getUid();
-                    Log.d(TAG, "Using current user ID: " + userId);
+                    // Save for future use
+                    prefs.edit().putString("userId", userId).apply();
                 } else {
                     Log.e(TAG, "No user is currently logged in");
                     return START_NOT_STICKY;

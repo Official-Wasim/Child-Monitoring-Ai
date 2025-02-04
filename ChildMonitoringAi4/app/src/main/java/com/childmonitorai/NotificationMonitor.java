@@ -95,6 +95,7 @@ public class NotificationMonitor extends NotificationListenerService {
             "(?i).*new message from.*",
             "(?i)Checking for new messages",
             "(?i).*messages?$",
+            "(?i)\\d+\\s+messages?\\s+from\\s+\\d+\\s+chats?"
         };
 
         return containsAnyPattern(text, unwantedPatterns) || 

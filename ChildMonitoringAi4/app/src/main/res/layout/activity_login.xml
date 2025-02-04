@@ -30,7 +30,6 @@
         android:layout_height="wrap_content"
         android:text="Login" />
 
-    <!-- SignUp Button instead of Text -->
     <Button
         android:id="@+id/signUpButton"
         android:layout_width="match_parent"

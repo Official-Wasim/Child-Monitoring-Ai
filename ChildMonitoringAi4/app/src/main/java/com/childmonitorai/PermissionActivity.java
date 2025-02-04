@@ -58,7 +58,6 @@ public class PermissionActivity extends AppCompatActivity {
         setupPermissionCard(cardAccessibility, "Accessibility Service", 
             "Required for monitoring app usage", this::handleAccessibilityPermission);
         
-        // Setup other cards similarly
     }
 
     private void setupPermissionCard(View card, String title, String description, 
@@ -96,7 +95,6 @@ public class PermissionActivity extends AppCompatActivity {
         updatePermissionStatus(cardLocation, isLocationPermissionGranted(this));
         updatePermissionStatus(cardAccessibility, 
             isAccessibilityServiceEnabled(this, WebMonitor.class));
-        // Update other permission statuses
     }
 
     private void updatePermissionStatus(View card, boolean isGranted) {

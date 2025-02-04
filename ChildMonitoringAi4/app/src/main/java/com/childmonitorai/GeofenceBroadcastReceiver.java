@@ -7,6 +7,8 @@ import android.content.SharedPreferences;
 import android.util.Log;
 import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingEvent;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import java.util.HashMap;
@@ -48,12 +50,31 @@ public class GeofenceBroadcastReceiver extends BroadcastReceiver {
             return;
         }
 
-        // Get userId and phoneModel from SharedPreferences
+        // Get userId and phoneModel
         SharedPreferences prefs = context.getSharedPreferences("AppPrefs", Context.MODE_PRIVATE);
-        String userId = prefs.getString("userId", "defaultUserId");
-        String phoneModel = prefs.getString("phoneModel", "defaultPhoneModel");
+        String userId = prefs.getString("userId", null);
+        String phoneModel = prefs.getString("phoneModel", null);
 
-        // Log to database
+        // Verify we have required data
+        if (userId == null || phoneModel == null) {
+            FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+            if (currentUser != null) {
+                userId = currentUser.getUid();
+                // Save userId for future use
+                prefs.edit().putString("userId", userId).apply();
+            } else {
+                Log.e(TAG, "No user ID available - cannot log notification");
+                return;
+            }
+
+            if (phoneModel == null) {
+                phoneModel = android.os.Build.MODEL;
+                // Save phoneModel for future use
+                prefs.edit().putString("phoneModel", phoneModel).apply();
+            }
+        }
+
+        // Upload to database
         String currentDate = getCurrentDate();
         DatabaseReference notificationsRef = FirebaseDatabase.getInstance()
             .getReference("users")

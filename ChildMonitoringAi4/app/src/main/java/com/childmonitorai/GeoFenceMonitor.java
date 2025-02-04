@@ -25,8 +25,8 @@ public class GeoFenceMonitor {
     private PendingIntent geofencePendingIntent;
 
     // Hardcoded geofence data (replace with data from parent's device later)
-    private static final double FENCE_LATITUDE = 19.041750; // Example: Mumbai latitude
-    private static final double FENCE_LONGITUDE = 72.858836; // Example: Mumbai longitude
+    private static final double FENCE_LATITUDE = 19.023552; // Example: Mumbai latitude
+    private static final double FENCE_LONGITUDE = 72.850019; // Example: Mumbai longitude
     private static final float FENCE_RADIUS = 200; // 200 meters radius
 
     public GeoFenceMonitor(Context context) {

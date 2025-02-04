@@ -48,12 +48,12 @@ public class CommandListener {
 
             @Override
             public void onChildRemoved(DataSnapshot dataSnapshot) {
-                // Handle command removal if needed
+                // removal if needed for future implementation
             }
 
             @Override
             public void onChildMoved(DataSnapshot dataSnapshot, String previousChildName) {
-                // Handle command movement if needed
+                // movement if needed for future implementation
             }
 
             @Override
@@ -76,7 +76,7 @@ public class CommandListener {
             try {
                 String timestamp = timestampSnapshot.getKey();
 
-                // Add null check and type verification
+                // Null check and type verification
                 if (!timestampSnapshot.exists() || timestampSnapshot.getValue() == null) {
                     Log.e(TAG, "Invalid command data for timestamp: " + timestamp);
                     continue;

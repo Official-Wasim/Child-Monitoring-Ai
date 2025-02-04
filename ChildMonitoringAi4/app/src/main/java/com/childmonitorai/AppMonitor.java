@@ -80,7 +80,7 @@ public class AppMonitor {
         return category;
     }
 
-    // Call this method to start monitoring app changes
+    // Start monitoring app changes
     public void startMonitoring() {
         // First scan for existing apps
         scanAndUploadInstalledApps();

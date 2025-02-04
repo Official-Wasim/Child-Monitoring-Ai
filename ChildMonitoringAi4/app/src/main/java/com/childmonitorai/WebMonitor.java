@@ -46,7 +46,7 @@ public class WebMonitor extends AccessibilityService {
         SharedPreferences prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE);
         userId = prefs.getString("userId", "defaultUserId");
         phoneModel = prefs.getString("phoneModel", "defaultPhoneModel");
-        dbHelper = new DatabaseHelper(); // Initialize DatabaseHelper
+        dbHelper = new DatabaseHelper(); 
         keywordMonitor = new KeywordMonitor(userId);
         flaggedContents = new FlaggedContents();
 
@@ -177,7 +177,7 @@ public class WebMonitor extends AccessibilityService {
             .child("phones")
             .child(phoneModel)
             .child("notifications")
-            .child(currentDate);  // Add date-based organization
+            .child(currentDate);  
 
         Map<String, Object> notification = new HashMap<>();
         notification.put("title", "Flagged Content Alert");

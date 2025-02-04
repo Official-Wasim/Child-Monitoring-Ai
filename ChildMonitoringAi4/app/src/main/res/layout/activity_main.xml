@@ -14,7 +14,7 @@
         android:layout_height="wrap_content"
         android:text="Welcome,"
     android:layout_marginBottom="10dp"
-    android:textStyle="bold" /> <!-- Bold Text Style -->
+    android:textStyle="bold" /> 
 
     <TextView
         android:id="@+id/currentUserEmail"

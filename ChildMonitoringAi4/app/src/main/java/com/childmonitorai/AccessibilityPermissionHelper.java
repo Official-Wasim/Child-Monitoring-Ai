@@ -14,7 +14,7 @@ public class AccessibilityPermissionHelper {
 
         // Check if enabledServices is null or empty
         if (TextUtils.isEmpty(enabledServices)) {
-            return false;  // Return false if no accessibility services are enabled
+            return false;  
         }
 
         TextUtils.SimpleStringSplitter splitter = new TextUtils.SimpleStringSplitter(colonSplitter.charAt(0));

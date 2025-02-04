@@ -56,7 +56,7 @@ public class LoginActivity extends AppCompatActivity {
                     .addOnCompleteListener(task -> {
                         showProgressBar(false);
                         if (task.isSuccessful()) {
-                            String userId = auth.getCurrentUser().getUid();  // Use UID instead of sanitizing email
+                            String userId = auth.getCurrentUser().getUid(); 
                             String phoneModel = android.os.Build.MODEL;
                             createOrUpdateUserNode(userId, phoneModel, email);
                             navigateToMainActivity();
@@ -79,7 +79,7 @@ public class LoginActivity extends AppCompatActivity {
                     .addOnCompleteListener(createTask -> {
                         showProgressBar(false);
                         if (createTask.isSuccessful()) {
-                            String userId = auth.getCurrentUser().getUid();  // Use UID instead of sanitizing email
+                            String userId = auth.getCurrentUser().getUid();  
                             String phoneModel = android.os.Build.MODEL;
                             createOrUpdateUserNode(userId, phoneModel, email);
                             navigateToMainActivity();
@@ -128,7 +128,7 @@ public class LoginActivity extends AppCompatActivity {
                 .child(phoneModel);
 
         userPhoneDataRef.child("email").setValue(email)
-                .addOnSuccessListener(aVoid -> {});  // Handle success
+                .addOnSuccessListener(aVoid -> {}); 
     }
 
     private void navigateToMainActivity() {

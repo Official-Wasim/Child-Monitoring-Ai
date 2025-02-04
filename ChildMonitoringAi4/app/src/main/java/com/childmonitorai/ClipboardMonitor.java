@@ -32,7 +32,7 @@ public class ClipboardMonitor {
     public void startMonitoring() {
         Log.d(TAG, "Clipboard monitoring started");
 
-        // Define the listener for clipboard changes
+        // Listener for clipboard changes
         clipChangedListener = new ClipboardManager.OnPrimaryClipChangedListener() {
             @Override
             public void onPrimaryClipChanged() {

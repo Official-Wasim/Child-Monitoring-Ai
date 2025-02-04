@@ -20,7 +20,7 @@ public class ContactMonitor {
         this.context = context;
         this.userId = userId;
         this.phoneModel = phoneModel;
-        this.databaseHelper = new DatabaseHelper(); // Initialize the helper class
+        this.databaseHelper = new DatabaseHelper();
     }
 
     public void startMonitoring() {
@@ -47,7 +47,8 @@ public class ContactMonitor {
                     new String[]{
                             ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
                             ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-                            ContactsContract.CommonDataKinds.Phone.NUMBER
+                            ContactsContract.CommonDataKinds.Phone.NUMBER,
+                            ContactsContract.CommonDataKinds.Phone.CONTACT_LAST_UPDATED_TIMESTAMP
                     },
                     null, null,
                     ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC");
@@ -57,24 +58,27 @@ public class ContactMonitor {
                     int contactIdIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID);
                     int contactNameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME);
                     int contactNumberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER);
+                    int lastUpdatedIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_LAST_UPDATED_TIMESTAMP);
 
                     if (contactIdIndex != -1 && contactNameIndex != -1 && contactNumberIndex != -1) {
                         String contactId = cursor.getString(contactIdIndex);
                         String contactName = cursor.getString(contactNameIndex);
                         String contactNumber = cursor.getString(contactNumberIndex);
+                        long lastUpdated = lastUpdatedIndex != -1 ? cursor.getLong(lastUpdatedIndex) : System.currentTimeMillis();
 
                         String uniqueContactId = generateUniqueId(contactId);
 
-                        // Create a ContactData object
+                        // Create a ContactData object with the last updated timestamp
                         ContactData contactData = new ContactData(
-                                contactName, contactNumber,
-                                System.currentTimeMillis(), 0, null
+                                contactName, 
+                                contactNumber,
+                                System.currentTimeMillis(),
+                                lastUpdated, 
+                                null // name before modification will be set by DatabaseHelper if needed
                         );
 
-                        // Upload using DatabaseHelper
+                        // DatabaseHelper will handle the duplicate check and update logic
                         databaseHelper.uploadContactData(userId, phoneModel, contactData, uniqueContactId);
-                    } else {
-                        Log.w(TAG, "One or more columns were not found in the cursor.");
                     }
                 } while (cursor.moveToNext());
             }

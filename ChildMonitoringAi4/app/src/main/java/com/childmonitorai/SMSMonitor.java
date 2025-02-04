@@ -53,7 +53,7 @@ public class SMSMonitor {
         // Register the ContentObserver to observe changes in the SMS database
         smsObserver.registerObserver(Uri.parse("content://sms"));
 
-//        // Optional: Use periodic polling for fetching all SMS (if required)
+//        // Optional: Periodic polling for fetching all SMS (if required)
 //        final Handler handler = new Handler(Looper.getMainLooper());
 //        Runnable runnable = new Runnable() {
 //            @Override

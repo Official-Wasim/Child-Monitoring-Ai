@@ -18,8 +18,9 @@ import java.util.regex.Pattern;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.android.gms.tasks.Task;
+import java.util.ArrayList;
 
-public class WebMonitor extends AccessibilityService {
+public class WebMonitor extends AccessibilityService implements FlaggedContents.FlaggedContentListener {
     private static final String TAG = "WebMonitor";
     private String userId;
     private String phoneModel;
@@ -30,14 +31,14 @@ public class WebMonitor extends AccessibilityService {
     private Map<String, Long> visitedUrlsCache = new HashMap<>();
     private static final long CACHE_EXPIRY_TIME = 5 * 1000; // 5 seconds cache expiry
     private DatabaseHelper dbHelper;
-    private KeywordMonitor keywordMonitor;
     private Map<String, WebVisitData> activeVisits = new HashMap<>();
     private static final long INACTIVE_THRESHOLD = 30 * 1000; // 30 seconds threshold
     private static final long UPDATE_INTERVAL = 5 * 1000; // Update duration every 5 seconds
     private String currentUrl = null;
-    private static final String PARENT_FCM_TOKEN = "f8K5LbCWQ5CqxBdrENcyhT:APA91bHOoHbXLGhEyLQEVjOO1kV38jCZyuMIJapI3L8X0HwKpFe0MM3CIE6P0X0DCgZfd6nHDgWIjJHYBZkdU-ErkppcWDCwk7V4tub1NSInLSBQuhtKnLc";
     private static final String CHANNEL_ID = "flagged_content_channel";
     private FlaggedContents flaggedContents;
+    private List<String> currentFlaggedKeywords = new ArrayList<>();
+    private List<String> currentFlaggedUrls = new ArrayList<>();
 
     @Override
     public void onCreate() {
@@ -47,8 +48,9 @@ public class WebMonitor extends AccessibilityService {
         userId = prefs.getString("userId", "defaultUserId");
         phoneModel = prefs.getString("phoneModel", "defaultPhoneModel");
         dbHelper = new DatabaseHelper(); 
-        keywordMonitor = new KeywordMonitor(userId);
         flaggedContents = new FlaggedContents();
+        FlaggedContents.initialize();
+        FlaggedContents.addContentListener(this);
 
         Log.d(TAG, "WebMonitor started with userId: " + userId + " and phoneModel: " + phoneModel);
     }
@@ -117,7 +119,7 @@ public class WebMonitor extends AccessibilityService {
             activeVisits.put(url, newVisit);
             
             // Check for flagged content
-            if (FlaggedContents.isFlaggedContent(url)) {
+            if (isFlaggedContent(url)) {
                 sendNotificationToParent(url);
             }
 
@@ -160,11 +162,12 @@ public class WebMonitor extends AccessibilityService {
     }
 
     private void sendNotificationToParent(String flaggedUrl) {
-        // Only send FCM notification
+        // Simply pass the URL and notification details to FCM service
         Intent fcmIntent = new Intent(this, FcmService.class);
         fcmIntent.putExtra("url", flaggedUrl);
         fcmIntent.putExtra("title", "Flagged Content Alert");
         fcmIntent.putExtra("message", "Child attempted to visit: " + flaggedUrl);
+        fcmIntent.putExtra("userId", userId); 
         startService(fcmIntent);
         
         // Get current date for organization
@@ -255,6 +258,7 @@ public class WebMonitor extends AccessibilityService {
 
     @Override
     public void onDestroy() {
+        FlaggedContents.removeContentListener(this);
         if (currentUrl != null) {
             WebVisitData visit = activeVisits.get(currentUrl);
             if (visit != null) {
@@ -264,5 +268,52 @@ public class WebMonitor extends AccessibilityService {
             }
         }
         super.onDestroy();
+    }
+
+    @Override
+    public void onFlaggedContentUpdated(List<String> keywords, List<String> urls) {
+        currentFlaggedKeywords = keywords;
+        currentFlaggedUrls = urls;
+        
+        // Check current URL against new flagged content
+        if (currentUrl != null) {
+            if (isFlaggedContent(currentUrl)) {
+                sendNotificationToParent(currentUrl);
+            }
+        }
+    }
+
+    @Override
+    public void onFlaggedContentRemoved(String removedItem, String type) {
+        Log.d(TAG, "Flagged content removed - " + type + ": " + removedItem);
+        if ("keyword".equals(type)) {
+            currentFlaggedKeywords.remove(removedItem.toLowerCase());
+        } else if ("url".equals(type)) {
+            currentFlaggedUrls.remove(removedItem.toLowerCase());
+        }
+    }
+
+    private boolean isFlaggedContent(String url) {
+        if (url == null) return false;
+        
+        String lowerUrl = url.toLowerCase();
+        
+        // Check against current keywords
+        for (String keyword : currentFlaggedKeywords) {
+            if (lowerUrl.contains(keyword)) {
+                Log.d(TAG, "Flagged content detected - keyword: " + keyword);
+                return true;
+            }
+        }
+        
+        // Check against current URLs
+        for (String flaggedUrl : currentFlaggedUrls) {
+            if (lowerUrl.contains(flaggedUrl)) {
+                Log.d(TAG, "Flagged content detected - URL: " + flaggedUrl);
+                return true;
+            }
+        }
+        
+        return false;
     }
 }

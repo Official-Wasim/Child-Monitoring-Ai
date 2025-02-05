@@ -17,6 +17,8 @@ public class AppUsageData {
     private int dayLaunchCount;
     private long dayUsageTime;
     private long lastUpdateTime;
+    private long dailyTimeLimit;
+    private boolean isRestricted;
 
     public AppUsageData(String packageName, String appName, long usageDuration, long timestamp) {
         this.packageName = packageName;
@@ -29,6 +31,8 @@ public class AppUsageData {
         this.dayUsageTime = 0;
         this.firstTimeUsed = timestamp;
         this.lastUpdateTime = timestamp;
+        this.dailyTimeLimit = 0;
+        this.isRestricted = false;
     }
 
     public String getPackageName() {
@@ -149,5 +153,21 @@ public class AppUsageData {
 
     public void setLastUpdateTime(long lastUpdateTime) {
         this.lastUpdateTime = lastUpdateTime;
+    }
+
+    public long getDailyTimeLimit() {
+        return dailyTimeLimit;
+    }
+
+    public void setDailyTimeLimit(long dailyTimeLimit) {
+        this.dailyTimeLimit = dailyTimeLimit;
+    }
+
+    public boolean isRestricted() {
+        return isRestricted;
+    }
+
+    public void setRestricted(boolean restricted) {
+        isRestricted = restricted;
     }
 }

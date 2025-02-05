@@ -103,18 +103,45 @@ public class LocationMonitor {
         handler.removeCallbacks(locationFetchRunnable);
     }
 
+    private Location getBestLastKnownLocation() {
+        Location location = null;
+        
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            return null;
+        }
+
+        try {
+            // Try GPS first
+            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                if (location != null && isAccurateEnough(location)) {
+                    return location;
+                }
+            }
+            
+            // Fall back to network provider if GPS is disabled or didn't provide accurate location
+            if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+            }
+        } catch (SecurityException e) {
+            Log.e(TAG, "Error getting location: " + e.getMessage());
+        }
+        
+        return location;
+    }
+
+    private boolean isAccurateEnough(Location location) {
+        if (location == null) return false;
+        long locationAge = System.currentTimeMillis() - location.getTime();
+        return locationAge < 5 * 60 * 1000 && location.getAccuracy() < 100;
+    }
+
     private final Runnable locationFetchRunnable = new Runnable() {
         @Override
         public void run() {
             try {
-                // Fetch the last known location
-                Location lastKnownLocation = null;
-
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                    lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-                } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                    lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-                }
+                Location lastKnownLocation = getBestLastKnownLocation();
 
                 if (lastKnownLocation != null) {
                     long currentTime = System.currentTimeMillis();
@@ -122,10 +149,10 @@ public class LocationMonitor {
                     // Check if 15 minutes have passed since last upload
                     if (currentTime - lastLocationUploadTime >= LOCATION_UPDATE_INTERVAL) {
                         uploadLocationData(lastKnownLocation);
-                        lastLocationUploadTime = currentTime; // Update the last upload time
+                        lastLocationUploadTime = currentTime;
                     }
                 } else {
-                    Log.w(TAG, "No last known location available.");
+                    Log.w(TAG, "No location available from any provider");
                 }
             } catch (SecurityException e) {
                 Log.e(TAG, "Location Permission denied: " + e.getMessage());

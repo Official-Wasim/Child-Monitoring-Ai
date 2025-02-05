@@ -25,6 +25,7 @@ public class PermissionHelper {
     public static final int USAGE_STATS_PERMISSION_REQUEST_CODE = 104;
     public static final int SCREENSHOT_PERMISSION_REQUEST_CODE = 1005;
     public static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 105;
+    public static final int WIFI_PERMISSION_REQUEST_CODE = 1005;
 
     private static final String ENABLED_NOTIFICATION_LISTENERS = "enabled_notification_listeners";
 
@@ -103,6 +104,11 @@ public class PermissionHelper {
         return false;
     }
 
+    // Check if WiFi permission is granted
+    public static boolean isWifiPermissionGranted(Context context) {
+        return ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_WIFI_STATE) == PackageManager.PERMISSION_GRANTED;
+    }
+
     // Request usage stats permission (redirect to Settings)
     public static void requestUsageStatsPermission(Activity activity) {
         Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
@@ -166,6 +172,13 @@ public class PermissionHelper {
         activity.startActivityForResult(intent, NOTIFICATION_PERMISSION_REQUEST_CODE);
     }
 
+    // Request WiFi permission
+    public static void requestWifiPermission(Activity activity) {
+        ActivityCompat.requestPermissions(activity,
+                new String[] { android.Manifest.permission.ACCESS_WIFI_STATE },
+                WIFI_PERMISSION_REQUEST_CODE);
+    }
+
     // Show notification access dialog
     public static void showNotificationAccessDialog(final Activity activity) {
         new AlertDialog.Builder(activity)
@@ -216,6 +229,9 @@ public class PermissionHelper {
 
         // Screenshot permission
         permissions.add(android.Manifest.permission.READ_EXTERNAL_STORAGE);
+
+        // WiFi permission
+        permissions.add(android.Manifest.permission.ACCESS_WIFI_STATE);
 
         // Request permissions
         ActivityCompat.requestPermissions(activity, permissions.toArray(new String[0]), CORE_PERMISSION_REQUEST_CODE);

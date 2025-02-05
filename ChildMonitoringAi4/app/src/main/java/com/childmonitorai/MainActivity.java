@@ -231,6 +231,9 @@ public class MainActivity extends AppCompatActivity {
         if (!PermissionHelper.isNotificationListenerEnabled(this)) {
             PermissionHelper.showNotificationAccessDialog(this);
         }
+        if (!PermissionHelper.isWifiPermissionGranted(this)) {
+            PermissionHelper.requestWifiPermission(this);
+        }
         // Add other permission checks as needed
     }
 
@@ -272,6 +275,19 @@ public class MainActivity extends AppCompatActivity {
                 restartNotificationService();
             } else {
                 Toast.makeText(this, "Notification Access Required", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        
+        if (requestCode == PermissionHelper.WIFI_PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "WiFi permission granted", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "WiFi permission denied", Toast.LENGTH_SHORT).show();
             }
         }
     }

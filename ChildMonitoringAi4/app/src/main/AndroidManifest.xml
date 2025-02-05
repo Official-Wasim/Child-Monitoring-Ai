@@ -23,6 +23,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
     <!-- Location Permissions -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -119,14 +120,9 @@
         </service>
 
         <service
-            android:name=".FCMService"
+            android:name=".FcmService"
             android:enabled="true"
             android:exported="false" />
-
-        <service
-            android:name=".FcmService"
-            android:exported="false">
-        </service>
 
         <receiver
             android:name=".BootReceiver"

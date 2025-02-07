@@ -2,6 +2,7 @@ package com.childmonitorai;
 import com.childmonitorai.models.Command;
 
 
+import android.Manifest;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -19,6 +20,8 @@ import android.location.Location;
 import android.location.LocationManager;
 import android.media.Image;
 import android.media.ImageReader;
+import android.os.Build;
+import android.telephony.SmsManager;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -149,8 +152,8 @@ public class CommandExecutor {
             }
 
             if (location != null) {
-                String result = String.format(Locale.US, "Latitude: %.6f, Longitude: %.6f",
-                        location.getLatitude(), location.getLongitude());
+                String result = String.format(Locale.US, "Latitude: %.6f, Longitude: %.6f, Accuracy: %.1f meters",
+                        location.getLatitude(), location.getLongitude(), location.getAccuracy());
                 updateCommandStatus(date, timestamp, "completed", result);
             } else {
                 updateCommandStatus(date, timestamp, "failed", "Unable to get location");
@@ -445,7 +448,7 @@ public class CommandExecutor {
 
     private void sendSms(String date, String timestamp, String phoneNumber, String message) {
         if (ActivityCompat.checkSelfPermission(context,
-                android.Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+                Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
             updateCommandStatus(date, timestamp, "failed", "SMS permission not granted");
             return;
         }
@@ -456,7 +459,7 @@ public class CommandExecutor {
         }
 
         try {
-            android.telephony.SmsManager smsManager = android.telephony.SmsManager.getDefault();
+            SmsManager smsManager = SmsManager.getDefault();
             ArrayList<String> parts = smsManager.divideMessage(message);
             
             // Create pending intents for sent and delivery
@@ -477,22 +480,24 @@ public class CommandExecutor {
             }
 
             // Register for SMS sent status
-            context.registerReceiver(new BroadcastReceiver() {
-                @Override
-                public void onReceive(Context arg0, Intent arg1) {
-                    switch (getResultCode()) {
-                        case Activity.RESULT_OK:
-                            updateCommandStatus(date, timestamp, "completed", 
-                                "SMS sent successfully to " + phoneNumber);
-                            break;
-                        default:
-                            updateCommandStatus(date, timestamp, "failed", 
-                                "Failed to send SMS: " + getResultCode());
-                            break;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.registerReceiver(new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context arg0, Intent arg1) {
+                        switch (getResultCode()) {
+                            case Activity.RESULT_OK:
+                                updateCommandStatus(date, timestamp, "completed",
+                                    "SMS sent successfully to " + phoneNumber);
+                                break;
+                            default:
+                                updateCommandStatus(date, timestamp, "failed",
+                                    "Failed to send SMS: " + getResultCode());
+                                break;
+                        }
+                        context.unregisterReceiver(this);
                     }
-                    context.unregisterReceiver(this);
-                }
-            }, new IntentFilter(SENT), Context.RECEIVER_NOT_EXPORTED);
+                }, new IntentFilter(SENT), Context.RECEIVER_NOT_EXPORTED);
+            }
 
             // Send the SMS
             smsManager.sendMultipartTextMessage(phoneNumber, null, parts, 
@@ -537,6 +542,7 @@ private void updateCommandStatus(String date, String timestamp, String status, S
             .child(date).child(timestamp);
 
     commandRef.child("status").setValue(status);
+    commandRef.child("lastUpdated").setValue(System.currentTimeMillis());
     if (result != null) {
         commandRef.child("result").setValue(result);
     }

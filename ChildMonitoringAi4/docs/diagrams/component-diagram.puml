@@ -1,0 +1,105 @@
+@startuml Child Monitoring AI - Component Diagram
+
+!define RECTANGLE class
+
+skinparam component {
+    BackgroundColor<<Service>> LightSkyBlue
+    BackgroundColor<<Monitor>> LightGreen
+    BackgroundColor<<Helper>> LightYellow
+    BackgroundColor<<Storage>> Pink
+    BorderColor Black
+    ArrowColor Black
+}
+
+package "Child Monitoring AI" {
+    [MainActivity] as main
+    [MonitoringService] as service <<Service>>
+    [PermissionHelper] as permHelper <<Helper>>
+    [DatabaseHelper] as dbHelper <<Helper>>
+    [FirebaseStorageHelper] as storageHelper <<Helper>>
+
+    package "Monitoring Components" {
+        [AppMonitor] as appMon <<Monitor>>
+        [CallMonitor] as callMon <<Monitor>>
+        [SMSMonitor] as smsMon <<Monitor>>
+        [MMSMonitor] as mmsMon <<Monitor>>
+        [LocationMonitor] as locMon <<Monitor>>
+        [WebMonitor] as webMon <<Monitor>>
+        [ContactMonitor] as contactMon <<Monitor>>
+        [ClipboardMonitor] as clipMon <<Monitor>>
+        
+        package "Social Media Monitoring" {
+            [SocialMediaMonitorService] as socialService <<Service>>
+            [WhatsappMonitor] as whatsappMon <<Monitor>>
+            [InstagramMonitor] as instaMon <<Monitor>>
+            [TelegramMonitor] as telegramMon <<Monitor>>
+            [SnapchatMonitor] as snapMon <<Monitor>>
+        }
+    }
+
+    package "Command Handling" {
+        [CommandListener] as cmdListener
+        [CommandExecutor] as cmdExec
+        [CameraHelper] as camHelper <<Helper>>
+        [NotificationMonitor] as notifyMon <<Monitor>>
+    }
+
+    package "Firebase Backend" {
+        database "Firebase Realtime\nDatabase" as firebaseDB <<Storage>>
+        database "Firebase Storage" as firebaseStorage <<Storage>>
+        [Firebase Authentication] as firebaseAuth
+    }
+}
+
+' Main App Connections
+main --> service : starts
+main --> permHelper : uses
+main --> dbHelper : uses
+main ..> firebaseAuth : authenticates
+
+' Service Connections
+service --> appMon : initializes
+service --> callMon : initializes
+service --> smsMon : initializes
+service --> mmsMon : initializes
+service --> locMon : initializes
+service --> webMon : initializes
+service --> contactMon : initializes
+service --> clipMon : initializes
+service --> socialService : initializes
+service --> cmdListener : initializes
+
+' Social Media Service Connections
+socialService --> whatsappMon : manages
+socialService --> instaMon : manages
+socialService --> telegramMon : manages
+socialService --> snapMon : manages
+
+' Command Handling Connections
+cmdListener --> cmdExec : triggers
+cmdExec --> camHelper : uses
+cmdExec --> notifyMon : uses
+
+' Database Connections
+dbHelper --> firebaseDB : writes/reads
+storageHelper --> firebaseStorage : writes/reads
+
+' Monitor to Database Connections
+appMon --> dbHelper : uploads data
+callMon --> dbHelper : uploads data
+smsMon --> dbHelper : uploads data
+mmsMon --> dbHelper : uploads data
+locMon --> dbHelper : uploads data
+webMon --> dbHelper : uploads data
+contactMon --> dbHelper : uploads data
+clipMon --> dbHelper : uploads data
+whatsappMon ..> dbHelper : uploads data
+instaMon ..> dbHelper : uploads data
+telegramMon ..> dbHelper : uploads data
+snapMon ..> dbHelper : uploads data
+
+' Storage Connections
+camHelper --> storageHelper : uploads media
+notifyMon --> dbHelper : uploads notifications
+
+@enduml

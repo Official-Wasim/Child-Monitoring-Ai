@@ -165,6 +165,7 @@ public class CommandListener {
                 .child(date).child(timestamp);
 
         commandRef.child("status").setValue(status);
+        commandRef.child("lastUpdated").setValue(System.currentTimeMillis());
         if (result != null) {
             commandRef.child("result").setValue(result);
         }

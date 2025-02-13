@@ -1,0 +1,110 @@
+digraph "Child Monitoring AI Deployment" {
+    rankdir = LR;
+    splines=ortho;
+    node [shape=box, style=filled, fillcolor=lightgrey];
+    
+    subgraph cluster_mobile {
+        label = "Child's Android Device";
+        style = filled;
+        fillcolor = lightblue;
+        
+        // Main app components
+        ChildMonitoringApp [label="Child Monitoring App\n(Android Application)"];
+        
+        // Services subcluster
+        subgraph cluster_services {
+            label = "Main Monitors";
+            style = filled;
+            fillcolor = lightyellow;
+            
+            WebMonitorService;
+            SocialMediaMonitorService;
+            NotificationMonitorService;
+            DeviceAdminService;
+            MonitoringService;
+        }
+
+        // Monitors subcluster
+        subgraph cluster_monitors {
+            label = "Monitors";
+            style = filled;
+            fillcolor = lightcyan;
+            
+            AppMonitor;
+            AppUsageMonitor;
+            AppLimitMonitor;
+            ContactMonitor;
+            LocationMonitor;
+            GeoFenceMonitor;
+            OnRefreshStatsMonitor;
+            SMSMonitor;
+            MMSMonitor;
+            ClipboardMonitor;
+            CallMonitor;
+            PhotosMonitor;
+            InstagramMonitor;
+            TelegramMonitor;
+            SnapchatMonitor;
+            WhatsappMonitor;
+            WebMonitor;
+        }
+
+        // Local storage
+        SharedPreferences [label="Shared Preferences\n(Local Storage)"];
+
+        // Command handling
+        CommandListener [label="Command Listener\n(Remote Control)"];
+        CommandExecutor [label="Command Executor"];
+    }
+
+    subgraph cluster_cloud {
+        label = "Cloud Infrastructure";
+        style = filled;
+        fillcolor = lightgreen;
+        
+        // Firebase services
+        FirebaseStorage [label="Firebase Storage"];
+        FirebaseAuth [label="Firebase Auth\n(Authentication)"];
+        FirebaseRealtime [label="Firebase Realtime DB\n(Data Storage)"];
+        FirebaseMessaging [label="Firebase Cloud Messaging\n(Notifications)"];
+        FirebaseFunctions [label="Firebase Functions\n(Backend Logic)"];
+    }
+
+    subgraph cluster_parent {
+        label = "Parent's Device";
+        style = filled;
+        fillcolor = lightpink;
+        
+        MobileApp [label="Parent App\n(Control Interface)"];
+    }
+
+    // Service connections
+    ChildMonitoringApp -> {WebMonitorService SocialMediaMonitorService NotificationMonitorService MonitoringService DeviceAdminService} [style=dotted];
+    ChildMonitoringApp -> FirebaseStorage;
+    
+    // Monitor connections
+    MonitoringService -> {AppMonitor ContactMonitor LocationMonitor SMSMonitor MMSMonitor 
+                         ClipboardMonitor CallMonitor InstagramMonitor TelegramMonitor 
+                         SnapchatMonitor WhatsappMonitor} [style=dotted];
+    
+    // Storage connections
+    ChildMonitoringApp -> SharedPreferences;
+    
+    // Command handling connections
+    CommandListener -> CommandExecutor;
+    CommandExecutor -> MonitoringService;
+    
+    // Cloud connections
+    ChildMonitoringApp -> FirebaseAuth [label="Authentication"];
+    ChildMonitoringApp -> FirebaseRealtime [label="Data Sync"];
+    ChildMonitoringApp -> FirebaseMessaging [label="Notifications"];
+    
+    FirebaseFunctions -> FirebaseRealtime [dir=both];
+    FirebaseFunctions -> FirebaseMessaging;
+    
+    // Parent device connections
+    MobileApp -> FirebaseAuth;
+    MobileApp -> FirebaseRealtime;
+    MobileApp -> FirebaseStorage
+    
+}

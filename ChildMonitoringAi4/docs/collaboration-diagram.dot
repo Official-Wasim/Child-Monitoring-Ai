@@ -1,0 +1,142 @@
+digraph "Child_Monitoring_AI_Collaboration" {
+    // Graph settings
+    rankdir=LR;
+    splines=ortho;
+    node [shape=box, style=rounded];
+    
+    // Main components
+    MainActivity [label="MainActivity"];
+    MonitoringService [label="MonitoringService\n(Command & FCM Handler)"];
+    DatabaseHelper [label="DatabaseHelper"];
+    FlaggedContents [label="FlaggedContents"];
+    CommandListener [label="CommandListener"];
+    FcmService [label="FcmService"];
+    ServiceManager [label="ServiceManager\n(Monitor Controller)"];
+    
+    // Firebase components
+    subgraph cluster_firebase {
+        label="Firebase\nRealtime DB";
+        style=dashed;
+        Users [label="Users"];
+        Commands [label="Commands"];
+        MonitoringData [label="Monitoring\nData"];
+        AppUsageData [label="App Usage\nData"];
+        WebActivity [label="Web Activity"];
+        SocialMessages [label="Social Messages"];
+        Notifications [label="Notifications"];
+        PhotosData [label="Photos Data"];
+    }
+    
+    // Monitors subgraph
+    subgraph cluster_monitors {
+        label="Monitors";
+        style=dashed;
+        AppMonitor;
+        WebMonitor;
+        SMSMonitor;
+        MMSMonitor;
+        CallMonitor;
+        ContactMonitor;
+        LocationMonitor;
+        GeoFenceMonitor;
+        ClipboardMonitor;
+        InstagramMonitor;
+        TelegramMonitor;
+        WhatsappMonitor;
+        SnapchatMonitor;
+    }
+    
+    // Add new service nodes
+    WebMonitorService [label="WebMonitorService"];
+    NotificationMonitorService [label="NotificationMonitorService"];
+    SocialMediaMonitorService [label="SocialMediaMonitorService"];
+    AppUsageService [label="AppUsageService"];
+    
+    // Relationships
+    MainActivity -> ServiceManager [label="1: starts"];
+    MainActivity -> CommandListener [label="2: initializes"];
+    MainActivity -> FlaggedContents [label="3: initializes"];
+    
+    ServiceManager -> {
+        WebMonitorService
+        NotificationMonitorService
+        SocialMediaMonitorService
+        AppUsageService
+        AppMonitor
+        WebMonitor
+        LocationMonitor
+        GeoFenceMonitor
+    } [label="initializes & manages"];
+    
+    CommandListener -> MonitoringService [label="sends commands"];
+    MonitoringService -> FcmService [label="handles notifications"];
+    MonitoringService -> ServiceManager [label="executes commands"];
+    
+    CommandListener -> Commands [label="6: listens"];
+    CommandListener -> MonitoringService [label="7: executes"];
+    
+    AppMonitor -> DatabaseHelper [label="8: stores"];
+    DatabaseHelper -> MonitoringData [label="9: uploads"];
+    
+    AppUsageService -> AppUsageData [label="uploads usage stats"];
+    WebMonitorService -> WebActivity [label="uploads visited URLs"];
+    SocialMediaMonitorService -> SocialMessages [label="uploads messages"];
+    NotificationMonitorService -> Notifications [label="uploads notifications"];
+    
+    FlaggedContents -> Users [label="10: fetches rules"];
+    
+    MonitoringService -> FcmService [label="11: notifications"];
+    FcmService -> Users [label="12: FCM token"];
+    
+    {WhatsappMonitor InstagramMonitor TelegramMonitor SnapchatMonitor} -> DatabaseHelper [label="13-16: messages"];
+    
+    AppMonitor -> DatabaseHelper [label="17: usage"];
+    WebMonitor -> DatabaseHelper [label="18: activity"];
+    LocationMonitor -> DatabaseHelper [label="19: location"];
+    GeoFenceMonitor -> DatabaseHelper [label="20: geofence"];
+    
+    PermissionHelper [label="PermissionHelper"];
+    MainActivity -> PermissionHelper [label="checks permissions"];
+    PermissionHelper -> MonitoringService [label="grants access"];
+    
+    FlaggedContents -> WebMonitorService [label="filters content"];
+    FlaggedContents -> NotificationMonitorService [label="filters notifications"];
+    
+    CommandListener -> MonitoringService -> ServiceManager [label="command flow"];
+    ServiceManager -> {
+        AppMonitor
+        WebMonitor
+        LocationMonitor
+        GeoFenceMonitor
+    } [label="executes commands"];
+    
+    DatabaseHelper -> MonitoringService [label="sync data"];
+    
+    subgraph cluster_social {
+        label="Social Media Monitoring";
+        style=dashed;
+        WhatsappMonitor -> SocialMessages;
+        InstagramMonitor -> SocialMessages;
+        TelegramMonitor -> SocialMessages;
+        SnapchatMonitor -> SocialMessages;
+    }
+    
+    subgraph cluster_system {
+        label="System Monitoring";
+        style=dashed;
+        ClipboardMonitor;
+        PhotosMonitor;  
+        SMSMonitor;
+        MMSMonitor;
+        CallMonitor;
+        ContactMonitor;
+    }
+    
+    DatabaseHelper_Note [shape=note, label="Handles all data storage and\nsynchronization with Firebase"];
+    CommandListener_Note [shape=note, label="Listens for and processes\nremote commands"];
+    FlaggedContents_Note [shape=note, label="Manages content filtering\nand usage restrictions"];
+    
+    DatabaseHelper -> DatabaseHelper_Note [style=dotted];
+    CommandListener -> CommandListener_Note [style=dotted];
+    FlaggedContents -> FlaggedContents_Note [style=dotted];
+}

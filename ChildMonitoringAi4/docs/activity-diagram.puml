@@ -1,0 +1,96 @@
+@startuml Child Monitoring AI Activity Flow
+
+start
+
+:Launch App;
+
+if (User Logged In?) then (no)
+  :Show Login Activity;
+  :Enter Email/Password;
+  if (Valid Credentials?) then (yes)
+    :Store User Details;
+  else (no)
+    :Show Error Message;
+    stop
+  endif
+else (yes)
+endif
+
+:Show Main Activity;
+
+:Check Required Permissions;
+
+partition "Permission Checks" {
+  if (Core Permissions Granted?) then (no)
+    :Show Permission Activity;
+    :Request Core Permissions;
+  endif
+  
+  if (Usage Stats Permission?) then (no)
+    :Show Usage Stats Dialog;
+    :Open Usage Settings;
+  endif
+  
+  if (Accessibility Permission?) then (no)
+    :Show Accessibility Dialog;
+    :Open Accessibility Settings;
+  endif
+  
+  if (Device Admin Permission?) then (no)
+    :Request Device Admin;
+  endif
+}
+
+if (All Permissions Granted?) then (yes)
+  fork
+    :Start AppUsageService;
+    :Monitor App Usage;
+    :Record App Sessions;
+  fork again
+    :Start WebMonitorService;
+    :Monitor Web Activity;
+  fork again
+    :Start MonitoringService;
+    :Handle Background Tasks;
+  end fork
+  fork
+    :Initialize FlaggedContents (keywords, URLs, geofences, app limits);
+  fork again
+    :Start MonitoringService;
+    :Create and start ContactMonitor, CallMonitor, ClipboardMonitor, AppMonitor;
+    :Upload data to Firebase;
+  fork again
+    :Start CommandListener;
+    :Fetch pending commands from Firebase;
+    if (Command pending?) then (yes)
+      :Execute command;
+      :Update command status in Firebase;
+    else (no)
+    endif
+  end fork
+else (no)
+  :Show Permission Requirements;
+  stop
+endif
+
+:Upload Monitoring Data;
+
+if (Logout Requested?) then (yes)
+  :Sign Out User;
+  :Clear Local Data;
+  :Return to Login;
+  stop
+endif
+
+if (User logs out?) then (yes)
+  :Stop all monitors;
+  :Clear user data;
+  :Navigate to Login;
+  stop
+else (no)
+  :Continue Monitoring;
+endif
+
+stop
+
+@enduml

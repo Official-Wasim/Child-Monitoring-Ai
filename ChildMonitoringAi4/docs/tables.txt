@@ -1,0 +1,100 @@
+CHILD MONITORING AI DATABASE TABLES
+
+1. APPS
+- package_name (PRIMARY KEY) : String  
+- app_name : String
+- timestamp : Long
+- status : String (installed/uninstalled/updated)
+- size : Long
+- version : String
+- category : String (system/updated_system/user_installed)
+- firstInstalled : Long
+- lastUpdated : Long
+
+2. APP_USAGE
+- date : String (YYYY-MM-DD format)
+- package_name : String
+- app_name : String
+- usage_duration : Long
+- launch_count : Integer
+- last_used : Long
+- first_time_used : Long
+- total_foreground_time : Long
+- day_launch_count : Integer
+- day_usage_time : Long
+- is_system_app : Boolean
+- category : String
+- last_update_time : Long
+- timestamp : Long
+
+3. APP_SESSIONS
+- sessionId : String (PRIMARY KEY)
+- package_name : String
+- app_name : String
+- start_time : Long
+- end_time : Long
+- duration : Long
+- timed_out : Boolean
+
+4. SOCIAL_MEDIA_MESSAGES
+- date : String (YYYY-MM-DD format)
+- platform : String (whatsapp/telegram/snapchat) 
+- sender : String
+- receiver : String
+- message : String
+- timestamp : String
+- direction : String (incoming/outgoing)
+
+5. CALLS
+- date : String (YYYY-MM-DD format)
+- number : String
+- duration : Long
+- type : String
+- timestamp : Long
+- contactName : String (optional)
+
+6. SMS
+- date : String (YYYY-MM-DD format)
+- type : String
+- address : String
+- body : String
+- timestamp : Long
+- contactName : String (optional)
+
+7. MMS
+- date : String (YYYY-MM-DD format)
+- subject : String
+- senderAddress : String
+- content : String
+
+8. CONTACTS
+- name : String
+- phoneNumber : String
+- creationTime : Long
+- lastModifiedTime : Long 
+- nameBeforeModification : String
+
+9. WEB_VISITS
+- date : String (YYYY-MM-DD format)
+- url : String
+- title : String
+- packageName : String
+- timestamp : Long
+- duration : Long
+- active : Boolean
+
+10. COMMANDS
+- command : String
+- status : String (pending/completed/failed)
+- params : Map<String,String>
+- result : String
+- lastUpdated : Long
+
+11. PREFERENCES
+- web_flagged/keywords : Array<String>
+- web_flagged/urls : Array<String>
+- geofences/ : Array<GeofenceData>
+- app_limits/ : Map<String,AppLimit>
+
+Note: All data is organized under:
+users/{userId}/phones/{deviceModel}/{data_type}/{date(optional)}/{entries}

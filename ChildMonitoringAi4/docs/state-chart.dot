@@ -1,0 +1,118 @@
+digraph "Child Monitoring AI States" {
+    rankdir=TB;
+    node [shape=box, style=rounded];
+    
+    // Initial state
+    start [shape=circle, width=0.2, style=filled, fillcolor=black];
+    
+    // Core states
+    Uninitialized [label="Uninitialized"];
+    Authenticating [label="Authenticating"];
+    RequestingPermissions [label="Requesting\nPermissions"];
+    Monitoring [label="Monitoring\nActive"];
+    
+    // Monitoring substates
+    subgraph cluster_monitoring {
+        label = "Monitoring States";
+        style = dashed;
+        
+        AppMonitoring [label="App Usage\nMonitoring"];
+        WebMonitoring [label="Web Activity\nMonitoring"];
+        SMSMonitoring [label="SMS/Call\nMonitoring"];
+        GeoMonitoring [label="Location\nMonitoring"];
+        ContentMonitoring [label="Content\nMonitoring"];
+        ClipboardMonitoring [label="Clipboard\nMonitoring"];
+        ContactMonitoring [label="Contacts\nMonitoring"];
+        CallMonitoring [label="Calls\nMonitoring"];
+        InstagramMonitoring [label="Instagram\nMonitoring"];
+        NotificationMonitoring [label="Notifications\nMonitoring"];
+        GeoFenceMonitoring [label="Geofence\nMonitoring"];
+    }
+
+    // Command handling states  
+    subgraph cluster_commands {
+        label = "Command States";
+        style = dashed;
+        
+        CommandPending [label="Command\nPending"];
+        CommandExecuting [label="Command\nExecuting"];
+        CommandComplete [label="Command\nComplete"];
+    }
+
+    // Add notification states
+    subgraph cluster_notifications {
+        label = "Notification States";
+        style = dashed;
+        
+        NotificationTrigger [label="Notification\nTrigger"];
+        NotificationPending [label="Notification\nPending"];
+        NotificationSending [label="Notification\nSending"];
+        NotificationDelivered [label="Notification\nDelivered"];
+        NotificationFailed [label="Notification\nFailed"];
+    }
+
+    // Transitions
+    start -> Uninitialized;
+    Uninitialized -> Authenticating [label="Launch App"];
+    Authenticating -> RequestingPermissions [label="Login Success"];
+    Authenticating -> Authenticating [label="Login Failed"];
+    
+    RequestingPermissions -> RequestingPermissions [label="Missing Permissions"];
+    RequestingPermissions -> Monitoring [label="All Permissions Granted"];
+    
+    Monitoring -> AppMonitoring;
+    Monitoring -> WebMonitoring;
+    Monitoring -> SMSMonitoring;
+    Monitoring -> GeoMonitoring;
+    Monitoring -> ContentMonitoring;
+    Monitoring -> ClipboardMonitoring;
+    Monitoring -> ContactMonitoring;
+    Monitoring -> CallMonitoring;
+    Monitoring -> InstagramMonitoring;
+    Monitoring -> NotificationMonitoring;
+    Monitoring -> GeoFenceMonitoring;
+    
+    AppMonitoring -> CommandPending [label="Receive Command"];
+    WebMonitoring -> CommandPending [label="Receive Command"]; 
+    SMSMonitoring -> CommandPending [label="Receive Command"];
+    GeoMonitoring -> CommandPending [label="Receive Command"];
+    ContentMonitoring -> CommandPending [label="Receive Command"];
+    ClipboardMonitoring -> CommandPending [label="Receive Command"];
+    ContactMonitoring -> CommandPending [label="Receive Command"];
+    CallMonitoring -> CommandPending [label="Receive Command"];
+    InstagramMonitoring -> CommandPending [label="Receive Command"];
+    NotificationMonitoring -> CommandPending [label="Receive Command"];
+    GeoFenceMonitoring -> CommandPending [label="Receive Command"];
+
+    // Add notification transitions from monitoring states
+    AppMonitoring -> NotificationTrigger [label="Usage Limit\nExceeded"];
+    WebMonitoring -> NotificationTrigger [label="Flagged\nContent"];
+    GeoFenceMonitoring -> NotificationTrigger [label="Geofence\nTransition"];
+    ContentMonitoring -> NotificationTrigger [label="Content\nViolation"];
+
+    // Add notification flow
+    NotificationTrigger -> NotificationPending;
+    NotificationPending -> NotificationSending [label="Process\nNotification"];
+    NotificationSending -> NotificationDelivered [label="Success"];
+    NotificationSending -> NotificationFailed [label="Failure"];
+    NotificationFailed -> NotificationPending [label="Retry"];
+    NotificationDelivered -> Monitoring [label="Complete"];
+
+    // Add connection to command system
+    NotificationDelivered -> CommandPending [label="Generate\nCommand"];
+
+    CommandPending -> CommandExecuting [label="Start Execution"];
+    CommandExecuting -> CommandComplete [label="Execution Success"];
+    CommandExecuting -> CommandPending [label="Execution Failed"];
+    CommandComplete -> Monitoring;
+
+    // Error state
+    Error [shape=octagon];
+    Monitoring -> Error [label="Service Error"];
+    Error -> Monitoring [label="Recovery"];
+    
+    // Logout state
+    Stopped [shape=doublecircle];
+    Monitoring -> Stopped [label="Logout"];
+    Stopped -> Authenticating [label="Restart"];
+}

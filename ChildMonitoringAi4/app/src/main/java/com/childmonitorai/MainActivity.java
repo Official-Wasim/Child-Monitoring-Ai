@@ -1,5 +1,6 @@
 package com.childmonitorai;
 
+import android.app.admin.DeviceAdminReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -15,6 +16,9 @@ import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.childmonitorai.helpers.PermissionHelper;
+import com.childmonitorai.services.MonitoringService;
+import com.childmonitorai.services.NotificationMonitorService;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
@@ -44,6 +48,8 @@ public class MainActivity extends AppCompatActivity {
     private static final int PERMISSION_CHECK_INTERVAL = 5000; // 5 seconds
     private Handler permissionCheckHandler;
     private Runnable permissionCheckRunnable;
+
+    private PermissionHelper permissionHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -90,7 +96,7 @@ public class MainActivity extends AppCompatActivity {
         DatabaseReference userNode = database.child(userId).child("phones").child(phoneModel).child("user-details");
         userNode.child("model").setValue(phoneModel);
         userNode.child("last_login").setValue(System.currentTimeMillis());
-        userNode.child("email").setValue(userEmail); 
+        userNode.child("email").setValue(userEmail);
     }
 
     private void startForegroundService() {
@@ -197,14 +203,14 @@ public class MainActivity extends AppCompatActivity {
 
     private void showCameraSettingsDialog() {
         new AlertDialog.Builder(this)
-            .setTitle("Camera Access Required")
-            .setMessage("Camera access appears to be disabled by system policy. Would you like to check device settings?")
-            .setPositiveButton("Open Settings", (dialog, which) -> {
-                Intent intent = new Intent(Settings.ACTION_SECURITY_SETTINGS);
-                startActivity(intent);
-            })
-            .setNegativeButton("Cancel", null)
-            .show();
+                .setTitle("Camera Access Required")
+                .setMessage("Camera access appears to be disabled by system policy. Would you like to check device settings?")
+                .setPositiveButton("Open Settings", (dialog, which) -> {
+                    Intent intent = new Intent(Settings.ACTION_SECURITY_SETTINGS);
+                    startActivity(intent);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void setupPermissionCheck() {
@@ -228,6 +234,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void checkPermissions() {
+        if (isFinishing()) return; // Don't show dialog if activity is finishing
+        
         if (!PermissionHelper.isNotificationListenerEnabled(this)) {
             PermissionHelper.showNotificationAccessDialog(this);
         }
@@ -241,6 +249,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         stopPermissionCheck();
+        PermissionHelper.cleanup();
     }
 
     @Override
@@ -282,7 +291,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        
+
         if (requestCode == PermissionHelper.WIFI_PERMISSION_REQUEST_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 Toast.makeText(this, "WiFi permission granted", Toast.LENGTH_SHORT).show();
@@ -297,7 +306,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void toggleNotificationListenerService() {
-        ComponentName thisComponent = new ComponentName(this, NotificationMonitor.class);
+        ComponentName thisComponent = new ComponentName(this, NotificationMonitorService.class);
         PackageManager pm = getPackageManager();
         pm.setComponentEnabledSetting(thisComponent,
                 PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP);
@@ -325,13 +334,13 @@ public class MainActivity extends AppCompatActivity {
 
     private void showUsageAccessDialog() {
         new AlertDialog.Builder(this)
-            .setTitle("Usage Access Required")
-            .setMessage("Please enable usage access for app monitoring.")
-            .setPositiveButton("Open Settings", (dialog, which) -> {
-                Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
-                startActivity(intent);
-            })
-            .setNegativeButton("Cancel", null)
-            .show();
+                .setTitle("Usage Access Required")
+                .setMessage("Please enable usage access for app monitoring.")
+                .setPositiveButton("Open Settings", (dialog, which) -> {
+                    Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+                    startActivity(intent);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 }

@@ -9,10 +9,11 @@ import android.widget.Switch;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
-import static com.childmonitorai.PermissionHelper.isLocationPermissionGranted;
-import static com.childmonitorai.PermissionHelper.isForegroundServicePermissionGranted;
-import static com.childmonitorai.PermissionHelper.areCorePermissionsGranted;
-import static com.childmonitorai.AccessibilityPermissionHelper.isAccessibilityServiceEnabled;
+import static com.childmonitorai.helpers.PermissionHelper.isLocationPermissionGranted;
+import static com.childmonitorai.helpers.PermissionHelper.areCorePermissionsGranted;
+import static com.childmonitorai.helpers.AccessibilityPermissionHelper.isAccessibilityServiceEnabled;
+
+import com.childmonitorai.services.WebMonitorService;
 
 public class PermissionActivity extends AppCompatActivity {
     private View cardCore, cardStorage, cardLocation, cardAccessibility;
@@ -50,14 +51,32 @@ public class PermissionActivity extends AppCompatActivity {
 
     private void setupPermissionCards() {
         setupPermissionCard(cardCore, "Core Permissions", 
-            "Basic permissions required for app functionality", this::handleCorePermissions);
+            "Required permissions for basic functionality including storage access, camera, and notifications. These are essential for monitoring and storing activity data.", 
+            this::handleCorePermissions);
+        
+        setupPermissionCard(cardStorage, "Storage Access", 
+            "Needed to store monitoring data and captured media files locally on the device.", 
+            this::handleStoragePermission);
         
         setupPermissionCard(cardLocation, "Location Access", 
-            "Required for location tracking features", this::handleLocationPermission);
+            "Enables tracking of device location for safety monitoring. This helps locate the device when needed.", 
+            this::handleLocationPermission);
         
         setupPermissionCard(cardAccessibility, "Accessibility Service", 
-            "Required for monitoring app usage", this::handleAccessibilityPermission);
+            "Required to monitor app usage and web browsing activity. This helps track digital activity and ensure online safety.", 
+            this::handleAccessibilityPermission);
         
+        setupPermissionCard(cardForegroundService, "Background Service", 
+            "Allows the app to run in the background for continuous monitoring and protection.", 
+            this::handleForegroundServicePermission);
+        
+        setupPermissionCard(cardUsageAccess, "Usage Access", 
+            "Enables monitoring of app usage statistics and screen time tracking.", 
+            this::handleUsageAccessPermission);
+        
+        setupPermissionCard(cardDeviceAdmin, "Device Administrator", 
+            "Provides advanced control features for device management and security settings.", 
+            this::handleDeviceAdminPermission);
     }
 
     private void setupPermissionCard(View card, String title, String description, 
@@ -75,6 +94,10 @@ public class PermissionActivity extends AppCompatActivity {
         // Handle core permissions
     }
 
+    private void handleStoragePermission(View view) {
+        // Handle storage permission
+    }
+
     private void handleLocationPermission(View view) {
         // Handle location permission
     }
@@ -82,6 +105,18 @@ public class PermissionActivity extends AppCompatActivity {
     private void handleAccessibilityPermission(View view) {
         Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
         startActivity(intent);
+    }
+
+    private void handleForegroundServicePermission(View view) {
+        // Handle foreground service permission
+    }
+
+    private void handleUsageAccessPermission(View view) {
+        // Handle usage access permission
+    }
+
+    private void handleDeviceAdminPermission(View view) {
+        // Handle device admin permission
     }
 
     @Override
@@ -94,7 +129,7 @@ public class PermissionActivity extends AppCompatActivity {
         updatePermissionStatus(cardCore, areCorePermissionsGranted(this));
         updatePermissionStatus(cardLocation, isLocationPermissionGranted(this));
         updatePermissionStatus(cardAccessibility, 
-            isAccessibilityServiceEnabled(this, WebMonitor.class));
+            isAccessibilityServiceEnabled(this, WebMonitorService.class));
     }
 
     private void updatePermissionStatus(View card, boolean isGranted) {

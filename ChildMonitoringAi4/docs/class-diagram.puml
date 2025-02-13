@@ -1,0 +1,702 @@
+@startuml ChildMonitoringAi
+
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+skinparam classFontStyle bold
+skinparam classBackgroundColor LightBlue
+skinparam interfaceBackgroundColor LightGreen
+
+' Interfaces
+package "interfaces" {
+    interface GeofenceDataListener {
+        +void onGeofenceDataUpdated(List<GeofenceData>)
+    }
+
+    interface AppLimitListener {
+        +void onAppLimitsUpdated(Map<String, AppLimit>)
+        +void onAppLimitChanged(String, AppLimit)
+        +void onAppLimitRemoved(String)
+    }
+
+    interface FlaggedContentListener {
+        +void onFlaggedContentUpdated(List<String>, List<String>)
+        +void onFlaggedContentRemoved(String, String)
+    }
+}
+
+' Data Models
+package "models" {
+    class AppData {
+        -String appName
+        -String packageName
+        -long timestamp
+        -String status
+        -long size
+        -String version
+        -String category
+        -long firstInstalled
+        -long lastUpdated
+        +Map<String, Object> toMap()
+        +{static} AppData fromMap(Map)
+    }
+
+    class AppUsageData {
+        -String packageName
+        -String appName
+        -long usageDuration
+        -long timestamp
+        -long lastTimeUsed
+        -int launchCount
+        -boolean isForeground
+        -long lastForegroundTime
+        -long totalForegroundTime
+        -String category
+        -boolean isSystemApp
+        -long firstTimeUsed
+        -int dayLaunchCount
+        -long dayUsageTime
+        -long lastUpdateTime
+        -long dailyTimeLimit
+        -boolean isRestricted
+        +void updateUsage(long)
+    }
+
+    class MessageData {
+        -String sender
+        -String receiver
+        -String message
+        -String timestamp
+        -String direction
+        -String platform
+        +Map<String, Object> toMap()
+    }
+
+    class ContactData {
+        -String name
+        -String phoneNumber
+        -long timestamp
+        -long creationTime
+        -long lastModifiedTime
+        -String nameBeforeModification
+        +boolean hasChanged()
+    }
+
+    class CallData {
+        -String phoneNumber
+        -String callType
+        -long callDuration
+        -String date
+        -long timestamp
+        -String contactName
+        +String getFormattedDuration()
+    }
+
+    class GeofenceData {
+        -String id
+        -String name
+        -double latitude
+        -double longitude
+        -float radius
+        -long timestamp
+        +boolean isInside(Location)
+    }
+
+    class ClipboardData {
+        -String content
+        -long timestamp
+        +String getFormattedDate()
+    }
+
+    class MMSData {
+        -String subject
+        -long date
+        -String senderAddress 
+        -String content
+        +MMSData()
+        +MMSData(String, long, String, String)
+        +String toString()
+    }
+
+    class SessionData {
+        -String sessionId
+        -String packageName
+        -String appName
+        -long startTime
+        -long endTime
+        -long duration
+        -boolean timedOut
+        +SessionData(String, String, String, long)
+        +String toString()
+    }
+
+    class SMSData {
+        -String type
+        -String address
+        -String body
+        -String date
+        -long timestamp
+        -String contactName
+    }
+
+    class WebVisitData {
+        -String url
+        -String title
+        -String packageName
+        -long timestamp
+        -long duration 
+        -boolean active
+        -String databaseKey
+        -String date
+        +WebVisitData(String, String, long)
+        +void updateDuration(long)
+    }
+
+    class Command {
+        -String command
+        -String status
+        -Map<String, String> params
+        -String result
+        -long lastUpdated
+        +Command()
+        +Command(String command, String status)
+        +Command(String command, Map<String, String> params, String status)
+        +String getCommand()
+        +void setCommand(String)
+        +String getStatus()
+        +void setStatus(String)
+        +Map<String, String> getParams()
+        +void setParams(Map<String, String>)
+        +String getResult()
+        +void setResult(String)
+        +long getLastUpdated()
+        +void setLastUpdated(long)
+        +String getParam(String key, String defaultValue)
+        +String toString()
+    }
+}
+
+' Monitors
+package "monitors" {
+    class TelegramMonitor {
+        -Context context
+        -String userId
+        -String deviceModel
+        -DatabaseHelper dbHelper
+        -DisplayMetrics displayMetrics
+        -Set<String> processedMessages
+        +void initialize()
+        +void startMonitoring()
+        +void stopMonitoring()
+        +void processMessages()
+        -String extractContactName()
+        -List<MessageInfo> extractMessages()
+        -boolean isOutgoingMessage()
+    }
+
+    class AppMonitor {
+        -Context context
+        -String userId
+        -String deviceModel
+        -DatabaseHelper dbHelper
+        -PackageManager packageManager
+        -UsageStatsManager usageStatsManager
+        +void initialize()
+        +void startMonitoring()
+        +void stopMonitoring()
+        +void scanAndUploadInstalledApps()
+        +void handleAppInstall(String)
+        +void handleAppUninstall(String)
+        +void handleAppUpdate(String)
+        -void uploadAppData(AppData)
+    }
+
+    class ClipboardMonitor {
+        -Context context
+        -String userId
+        -String deviceModel
+        -DatabaseHelper dbHelper
+        -ClipboardManager clipboardManager
+        -SharedPreferences prefs
+        -OnPrimaryClipChangedListener listener
+        +void initialize()
+        +void startMonitoring()
+        +void stopMonitoring()
+        -void handleClipboardChange()
+        -boolean isDuplicateContent(String)
+    }
+
+    class AppUsageMonitor {
+        -String userId
+        -String phoneModel
+        -DatabaseHelper databaseHelper
+        -UsageStatsManager usageStatsManager
+        -Map<String, AppUsageData> appUsageMap
+        -Map<String, SessionData> activeSessions
+        +void startMonitoring()
+        +void stopMonitoring()
+        -void processUsageEvents()
+        -void handleUsageEvent()
+    }
+
+    class CallMonitor {
+        -String userId
+        -String phoneModel
+        -Context context
+        -BaseContentObserver callLogObserver
+        -long installationDate
+        +void startMonitoring()
+        +void stopMonitoring()
+        -void fetchCalls()
+        -String getContactName()
+    }
+
+    class ContactMonitor {
+        -String userId
+        -String phoneModel
+        -Context context
+        -BaseContentObserver contactObserver
+        -DatabaseHelper databaseHelper
+        +void startMonitoring()
+        +void stopMonitoring()
+        -void fetchContacts()
+    }
+
+    class InstagramMonitor {
+        -DisplayMetrics displayMetrics
+        +void processMessages()
+        -boolean isChatScreen()
+        -String extractUserName()
+        -List<MessageInfo> extractMessages()
+        -boolean isOutgoingMessage()
+    }
+
+    class LocationMonitor {
+        -Context context
+        -String userId
+        -String phoneModel
+        -LocationManager locationManager
+        -LocationListener locationListener
+        +void startMonitoring()
+        +void stopMonitoring()
+        -Location getBestLastKnownLocation()
+        -void uploadLocationData()
+    }
+
+    class MMSMonitor {
+        -Context context
+        -String userId
+        -String phoneModel
+        -long installationDate
+        +void startMonitoring()
+        -void fetchMms()
+        -String fetchSenderAddress()
+        -String fetchMmsContent()
+    }
+
+    class PhotosMonitor {
+        -FirebaseStorageHelper firebaseStorageHelper
+        +void startMonitoring()
+        -boolean hasStoragePermission()
+        -void checkForNewPhotos()
+    }
+
+    class SMSMonitor {
+        -String userId
+        -String phoneModel
+        -Context context
+        -BaseContentObserver smsObserver
+        -long installationDate
+        +void startMonitoring()
+        +void stopMonitoring()
+        -void fetchSMS()
+    }
+
+    class SnapchatMonitor {
+        -DisplayMetrics displayMetrics
+        -DatabaseHelper databaseHelper
+        +void processMessages()
+        -boolean isSnapchatChatScreen()
+        -String extractContactName()
+        -List<MessageInfo> extractMessages()
+    }
+
+    class WhatsappMonitor {
+        -DisplayMetrics displayMetrics
+        +void processMessages()
+        -String extractContactName()
+        -List<MessageInfo> extractMessages()
+        -boolean isOutgoingMessage()
+    }
+
+    class AppLimitMonitor {
+        -Context context
+        -String userId
+        -String deviceModel
+        -DatabaseHelper dbHelper
+        -Map<String, Long> appLimits
+        +void startMonitoring()
+        +void stopMonitoring()
+        -void checkLimits()
+        -void handleLimitExceeded(String)
+    }
+
+    class GeoFenceMonitor {
+        -GeofencingClient geofencingClient
+        -Context context
+        -PendingIntent geofencePendingIntent
+        -FirebaseDatabase database
+        -String userId
+        -String phoneModel
+        +GeoFenceMonitor(Context)
+        +boolean hasRequiredPermissions()
+        +boolean isLocationEnabled()
+        +void startGeofencing()
+        +void stopGeofencing()
+        -List<Geofence> convertToGeofenceList()
+        -void startGeofencing(List<Geofence>)
+    }
+
+    class OnRefreshStatsMonitor {
+        -Context context
+        -DatabaseReference databaseReference
+        -DatabaseReference connectedRef
+        -boolean isFirebaseConnected
+        +void startMonitoring()
+        -void updateRefreshResult()
+        -Location getLastKnownLocation()
+    }
+}
+
+' Helpers
+package "helpers" {
+    class FlaggedContents {
+        -List<String> flaggedKeywords
+        -List<String> flaggedUrls
+        -Map<String, GeofenceData> geofenceData
+        -Map<String, AppLimit> appLimits
+        -List<GeofenceDataListener> geofenceListeners
+        -List<AppLimitListener> appLimitListeners
+        +{static} void initialize()
+        +{static} boolean isFlaggedContent(String)
+        +{static} void addGeofenceListener()
+        +{static} void addAppLimitListener()
+    }
+
+    class BaseContentObserver {
+        -Context context
+        -String tag
+        +BaseContentObserver(Context)
+        #Context getContext()
+        #void registerObserver(Uri)
+        #void unregisterObserver()
+        #abstract void onContentChanged(Uri)
+        +void onChange(boolean, Uri)
+    }
+
+    class CameraHelper {
+        -Context context
+        -String userId
+        -String deviceId 
+        -FirebaseStorageHelper storageHelper
+        -CommandStatusUpdater statusUpdater
+        +CameraHelper(Context, String, String, FirebaseStorageHelper, CommandStatusUpdater)
+        +void takePicture(String, String, String, boolean)
+        -boolean checkCameraPermissionAndAvailability(String, String)
+        -void createCaptureSession(CameraDevice, ImageReader, boolean, String, String)
+        -boolean isCameraAvailable(CameraManager, String, String, String)
+        -String getCameraErrorMessage(int)
+        -void uploadImage(Image, CameraDevice, ImageReader, String, String)
+    }
+
+    class PermissionHelper {
+        +{static} void requestAllPermissions(Activity)
+        +{static} boolean areCorePermissionsGranted(Context)
+        +{static} boolean isLocationPermissionGranted(Context)
+        +{static} boolean isForegroundServicePermissionGranted(Context)
+        +{static} boolean isMediaPermissionGranted(Context)
+        +{static} boolean isUsageStatsPermissionGranted(Context)
+        +{static} boolean isScreenshotPermissionGranted(Context)
+        +{static} boolean isNotificationListenerEnabled(Context)
+        +{static} boolean isWifiPermissionGranted(Context)
+    }
+
+    class AccessibilityPermissionHelper {
+        +{static} boolean isAccessibilityServiceEnabled(Context, Class<?>)
+    }
+
+    class UsageTrackingWorker {
+            - context: Context
+            - userId: String
+            - deviceId: String
+            + doWork(): Result
+            - trackAppUsage(): void
+            - uploadUsageData(usageData: Map<String, Long>): void
+    }
+}
+
+' Database Package
+package "database" {
+    class DatabaseHelper {
+        - database: DatabaseReference
+        + uploadCallDataByDate(userId: String, phoneModel: String, callData: CallData, uniqueCallId: String, callDate: String)
+        + uploadSMSDataByDate(userId: String, phoneModel: String, smsData: SMSData, uniqueSMSId: String, smsDate: String)
+        + uploadMMSDataByDate(userId: String, phoneModel: String, mmsData: MMSData, uniqueMMSId: String, mmsDate: String)
+        + uploadLocationDataByDate(userId: String, phoneModel: String, locationData: Map<String, Object>, uniqueLocationId: String, locationDate: String)
+        + uploadContactData(userId: String, phoneModel: String, contactData: ContactData, uniqueContactId: String)
+        + uploadAppData(userId: String, phoneModel: String, uniqueKey: String, appMap: Map<String, Object>)
+        + uploadWebVisitDataByDate(userId: String, phoneModel: String, visitData: WebVisitData)
+        + uploadAppUsageDataByDate(userId: String, phoneModel: String, appUsageData: AppUsageData)
+        + uploadClipboardDataByDate(userId: String, phoneModel: String, clipboardData: ClipboardData)
+        + uploadSocialMessageData(userId: String, phoneModel: String, messageData: MessageData, uniqueMessageId: String, messageDate: String, platform: String)
+        + uploadSessionData(userId: String, phoneModel: String, sessionData: SessionData)
+        - updateDailyUsage(userId: String, phoneModel: String, sessionData: SessionData)
+        - sanitizePath(originalPath: String): String
+    }
+
+
+    class FirebaseStorageHelper {
+        - storage: FirebaseStorage
+        + uploadImage(path: String, imageData: byte[])
+        + uploadScreenshot(userId: String, phoneModel: String, screenshotData: byte[])
+        + uploadCommandScreenshot(userId: String, phoneModel: String, screenshotData: byte[], date: String, timestamp: String, callback: ScreenshotCallback)
+        + uploadCapture(userId: String, phoneModel: String, captureData: byte[], date: String, timestamp: String, callback: CaptureCallback)
+        + uploadAudio(userId: String, phoneModel: String, audioData: byte[], date: String, timestamp: String, callback: AudioCallback)
+        + uploadPhoto(userId: String, phoneModel: String, localPath: String, callback: PhotoCallback)
+    }
+}
+
+' Commands Package  
+package "commands" {
+    class CommandListener {
+        -DatabaseReference mDatabase
+        -String userId
+        -String deviceId
+        -CommandExecutor commandExecutor
+        -ChildEventListener commandListener
+        +CommandListener(String, String, Context)
+        +void setCommandExecutor(CommandExecutor)
+        +void startListeningForCommands()
+        -void processCommands(DataSnapshot)
+        +void stopListeningForCommands()
+        -void updateCommandStatus(String, String, String, String)
+    }
+
+    class CommandExecutor {
+        -String TAG
+        -DatabaseReference mDatabase
+        -String userId
+        -String deviceId
+        -Context context
+        -FirebaseStorageHelper storageHelper
+        -CameraHelper cameraHelper
+        +CommandExecutor(String userId, String deviceId, Context context)
+        +void executeCommand(Command command, String date, String timestamp)
+        -void fetchLocation(String date, String timestamp)
+        -void recoverCalls(String date, String timestamp, String phoneNumber, int dataCount)
+        -void retrieveContacts(String date, String timestamp)
+        -void recoverSms(String date, String timestamp, String phoneNumber, int dataCount)
+        -void vibratePhone(String date, String timestamp, int duration)
+        -void takePicture(String date, String timestamp, String cameraType, boolean useFlash)
+        -void recordAudio(String date, String timestamp, int durationMinutes)
+        -void sendSms(String date, String timestamp, String phoneNumber, String message)
+        -String getCallTypeString(int callType)
+        -String getSmsTypeString(int type)
+        -void updateCommandStatus(String date, String timestamp, String status, String result)
+    }
+}
+
+' Main Activities
+package "activities" {
+    class MainActivity {
+        -FirebaseAuth auth
+        -DatabaseReference database
+        -String userId
+        -String phoneModel
+        -List<BaseMonitor> monitors
+        +void onCreate()
+        #void onStart()
+        #void onStop()
+        -void initializeMonitors()
+        -void startMonitoring()
+        -void stopMonitoring()
+    }
+
+    class LoginActivity {
+        -FirebaseAuth auth
+        +void onCreate()
+        -void handleLogin()
+        -void validateInput()
+    }
+
+    class PermissionActivity {
+        -View cardCore
+        -View cardStorage  
+        -View cardLocation
+        -View cardAccessibility
+        -View cardForegroundService
+        -View cardUsageAccess
+        -View cardDeviceAdmin
+        -Toolbar toolbar
+        +void onCreate()
+        -void initializeViews()
+        -void setupToolbar()
+        -void setupPermissionCards()
+        -void handleCorePermissions()
+        -void handleLocationPermission()
+        -void handleAccessibilityPermission()
+        -void updatePermissionStatuses()
+        -void updatePermissionStatus()
+    }
+}
+
+' Services
+package "services" {
+    class MonitoringService {
+        -String userId
+        -String phoneModel
+        -AppMonitor appMonitor
+        -ClipboardMonitor clipboardMonitor
+        -TelegramMonitor telegramMonitor
+        -SMSMonitor smsMonitor
+        -CallMonitor callMonitor
+        -ContactMonitor contactMonitor
+        -WebMonitorService webMonitor
+        -DatabaseHelper dbHelper
+        +void onCreate()
+        +int onStartCommand()
+        +void onDestroy()
+        -void initializeMonitors()
+        -void startMonitoring()
+        -void stopMonitoring()
+        -void createNotificationChannel()
+        -Notification buildForegroundNotification()
+    }
+
+    class WebMonitorService {
+        -String userId
+        -String phoneModel
+        -DatabaseHelper dbHelper
+        -Map<String, WebVisitData> activeVisits
+        +void onAccessibilityEvent()
+        +void handleUrlVisit()
+        -boolean isFlaggedContent()
+    }
+    
+    class NotificationMonitorService {
+        -DatabaseHelper dbHelper
+        -Set<String> processedNotifications
+        +void onNotificationPosted()
+        +void processNotification()
+    }
+
+    class SocialMediaMonitorService {
+        -DatabaseReference mDatabase
+        -Set<String> processedMessages
+        -WhatsappMonitor whatsappMonitor
+        -InstagramMonitor instagramMonitor
+        -SnapchatMonitor snapchatMonitor
+        -TelegramMonitor telegramMonitor
+        -DatabaseHelper databaseHelper
+        +void onCreate()
+        +void onAccessibilityEvent()
+        +void onServiceConnected()
+        +String getUserId()
+        +String getDeviceModel()
+    }
+
+    class FcmService {
+        -DatabaseReference databaseRef
+        +int onStartCommand()
+        -void fetchParentTokenAndSendNotification()
+        -String getAccessToken()
+    }
+
+    class BootReceiverService {
+        +void onReceive()
+    }
+
+    class DeviceAdminReceiverService {
+        +void onEnabled()
+        +void onDisabled()
+        +CharSequence onDisableRequested()
+    }
+
+    class GeofenceBroadcastReceiver {
+        +void onReceive()
+    }
+}
+
+' Relationships
+MainActivity o-- TelegramMonitor: manages
+MainActivity o-- AppMonitor: manages
+MainActivity o-- ClipboardMonitor: manages
+TelegramMonitor --> DatabaseHelper: uses
+AppMonitor --> DatabaseHelper: uses
+ClipboardMonitor --> DatabaseHelper: uses
+FlaggedContents ..> GeofenceDataListener: notifies
+FlaggedContents ..> AppLimitListener: notifies
+FlaggedContents ..> FlaggedContentListener: notifies
+TelegramMonitor --> MessageData: creates
+AppMonitor --> AppData: creates
+AppMonitor --> AppUsageData: creates
+ClipboardMonitor --> ClipboardData: creates
+DatabaseHelper --> "*" AppData: handles
+DatabaseHelper --> "*" MessageData: handles
+DatabaseHelper --> "*" CallData: handles
+DatabaseHelper --> "*" ContactData: handles
+MonitoringService o-- AppMonitor
+MonitoringService o-- ClipboardMonitor  
+MonitoringService o-- TelegramMonitor
+MonitoringService o-- SMSMonitor
+MonitoringService o-- CallMonitor
+MonitoringService o-- ContactMonitor
+MonitoringService o-- WebMonitorService
+MonitoringService o-- NotificationMonitorService
+MonitoringService --> "database.DatabaseHelper": uses
+WebMonitorService --> "database.FirebaseStorageHelper": uses
+NotificationMonitorService --> DatabaseHelper
+MainActivity --> MonitoringService: starts >
+MonitoringService o-- AppUsageMonitor
+MonitoringService o-- LocationMonitor
+MonitoringService o-- PhotosMonitor
+MonitoringService o-- InstagramMonitor
+MonitoringService o-- WhatsappMonitor
+MonitoringService o-- SnapchatMonitor
+MonitoringService o-- MMSMonitor
+MonitoringService o-- AppLimitMonitor
+MonitoringService o-- GeoFenceMonitor
+MonitoringService o-- OnRefreshStatsMonitor
+
+GeoFenceMonitor --> DatabaseHelper: uses
+GeoFenceMonitor --> GeofenceData: manages
+WebMonitorService --> FirebaseStorageHelper: uses
+PhotosMonitor --> FirebaseStorageHelper: uses
+CallMonitor --> BaseContentObserver: extends
+ContactMonitor --> BaseContentObserver: extends
+SMSMonitor --> BaseContentObserver: extends
+AppUsageMonitor --> SessionData: creates
+MMSMonitor --> MMSData: creates
+SMSMonitor --> SMSData: creates
+WebMonitorService --> WebVisitData: creates
+MonitoringService --> Command: handles
+MonitoringService --> SocialMediaMonitorService: starts
+SocialMediaMonitorService --> WhatsappMonitor: manages
+SocialMediaMonitorService --> InstagramMonitor: manages
+SocialMediaMonitorService --> SnapchatMonitor: manages
+SocialMediaMonitorService --> TelegramMonitor: manages
+MonitoringService --> "commands.CommandExecutor": uses
+CommandListener --> "commands.CommandExecutor": uses
+MonitoringService --> FcmService: uses
+BootReceiverService --> MonitoringService: starts
+GeoFenceMonitor --> GeofenceBroadcastReceiver: registers
+MonitoringService --> DeviceAdminReceiverService: uses
+MainActivity --> PermissionActivity: launches
+PermissionActivity --> PermissionHelper: uses
+CommandExecutor --> CameraHelper: uses
+PermissionActivity --> PermissionHelper: uses
+WebMonitorService --> PermissionHelper: uses
+MonitoringService --> AccessibilityPermissionHelper: uses
+AppUsageMonitor --> UsageTrackingWorker: schedules
+CameraHelper --> "database.FirebaseStorageHelper": uses
+
+@enduml

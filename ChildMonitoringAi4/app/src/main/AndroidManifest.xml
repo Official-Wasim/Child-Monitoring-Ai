@@ -24,6 +24,7 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
 
     <!-- Location Permissions -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -67,7 +68,7 @@
         android:theme="@style/Theme.ChildMonitorAI">
 
         <activity
-            android:name=".LoginActivity"
+            android:name="com.childmonitorai.LoginActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -76,17 +77,23 @@
         </activity>
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.childmonitorai.MainActivity"
             android:exported="false" />
 
+        <activity
+            android:name="com.childmonitorai.PermissionActivity"
+            android:exported="false"
+            android:label="Permissions"
+            android:theme="@style/Theme.ChildMonitorAI.NoActionBar"
+            android:parentActivityName="com.childmonitorai.MainActivity" />
 
         <service
-            android:name=".MonitoringService"
+            android:name="com.childmonitorai.services.MonitoringService"
             android:foregroundServiceType="location"
             android:exported="false" />
 
         <service
-            android:name=".WebMonitor"
+            android:name="com.childmonitorai.services.WebMonitorService"
             android:exported="true"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
@@ -98,7 +105,7 @@
         </service>
 
         <!-- Add NotificationMonitor service -->
-        <service android:name=".NotificationMonitor"
+        <service android:name="com.childmonitorai.services.NotificationMonitorService"
             android:label="@string/app_name"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="false">
@@ -108,7 +115,7 @@
         </service>
 
         <service
-            android:name=".SocialMediaMonitorService"
+            android:name="com.childmonitorai.services.SocialMediaMonitorService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true">
             <intent-filter>
@@ -120,12 +127,12 @@
         </service>
 
         <service
-            android:name=".FcmService"
+            android:name="com.childmonitorai.services.FcmService"
             android:enabled="true"
             android:exported="false" />
 
         <receiver
-            android:name=".BootReceiver"
+            android:name="com.childmonitorai.services.BootReceiverService"
             android:enabled="true"
             android:exported="false"
             android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
@@ -137,7 +144,7 @@
 
         <!-- Add device admin receiver -->
         <receiver
-            android:name=".DeviceAdminReceiver"
+            android:name="com.childmonitorai.services.DeviceAdminReceiverService"
             android:description="@string/device_admin_description"
             android:label="@string/device_admin_label"
             android:permission="android.permission.BIND_DEVICE_ADMIN"
@@ -153,9 +160,10 @@
 
         <!-- Add GeofenceBroadcastReceiver -->
         <receiver
-            android:name=".GeofenceBroadcastReceiver"
+            android:name="com.childmonitorai.services.GeofenceBroadcastReceiver"
             android:enabled="true"
-            android:exported="true"/>
+            android:exported="true"
+            android:permission="TODO" />
 
     </application>
 </manifest>

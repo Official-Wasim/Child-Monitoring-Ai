@@ -1,0 +1,93 @@
+@startuml
+left to right direction
+skinparam packageStyle rect
+skinparam shadowing false
+
+actor Parent as parent
+actor Child as child
+
+rectangle "Child Monitoring App" {
+    package "Device Monitoring" {
+        (Monitor SMS & MMS) as smsMonitor
+        (Monitor Calls) as callMonitor
+        (Monitor Location) as locationMonitor
+        (Track App Usage) as appMonitor
+        (Monitor Web Activity) as webMonitor
+        (Monitor Clipboard) as clipMonitor
+        (Monitor Contacts) as contactMonitor
+        (Monitor Photos) as photoMonitor
+        (Track App Sessions) as sessionMonitor
+        (Monitor GeoFences) as geoFenceMonitor
+        (App Limit Monitor) as appLimitMonitor
+        (Track App Installation) as appInstallMonitor
+        (Monitor Usage Stats) as usageStatsMonitor
+        (Monitor Device Health) as onRefreshStatsMonitor
+    }
+
+    package "Social Media Monitoring" {
+        (Monitor WhatsApp) as whatsapp
+        (Monitor Instagram) as instagram
+        (Monitor Snapchat) as snapchat
+        (Monitor Telegram) as telegram
+    }
+
+    package "Core Features" {
+        (Upload Data to Firebase) as uploadData
+        (Real-time Monitoring) as realtime
+        (Apply App Restrictions) as restrictions
+        (Enforce Geofencing) as geofencing
+        (Process Notifications) as notifications
+        (Manage Permissions) as permissions
+        (Data Synchronization) as sync
+    }
+}
+
+rectangle "Parent Controls" {
+    (Login/Authentication) as auth
+    (View Activity Reports) as viewReports
+    (Configure Monitoring Settings) as configSettings
+    (Monitor Child Location) as trackLocation
+}
+
+' Child interactions
+child --> smsMonitor
+child --> callMonitor
+child --> appMonitor
+child --> webMonitor
+child --> clipMonitor
+child --> photoMonitor
+child --> sessionMonitor
+
+' Social media connections
+socialMonitor --> whatsapp
+socialMonitor --> instagram
+socialMonitor --> snapchat
+socialMonitor --> telegram
+
+' Core functionality flows
+smsMonitor --> uploadData
+callMonitor --> uploadData
+locationMonitor --> uploadData
+appMonitor --> uploadData
+webMonitor --> uploadData
+clipMonitor --> uploadData
+contactMonitor --> uploadData
+photoMonitor --> uploadData
+sessionMonitor --> uploadData
+geoFenceMonitor --> uploadData
+appLimitMonitor --> uploadData
+usageStatsMonitor --> uploadData
+
+' Parent interactions
+parent --> auth
+auth --> viewReports
+parent --> configSettings
+parent --> trackLocation
+
+' System connections
+permissions ..> realtime
+uploadData ..> sync
+configSettings ..> restrictions
+configSettings ..> geofencing
+
+@enduml

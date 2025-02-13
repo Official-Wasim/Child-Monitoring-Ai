@@ -1,0 +1,104 @@
+digraph ChildMonitoringSequence {
+    rankdir=TB;
+    node [shape=box];
+    
+    // Participants
+    "Parent App" [shape=actor];
+    "Child App" [shape=actor];
+    "Firebase Auth" [shape=component];
+    "Firebase DB" [shape=component];
+    "Firebase Storage" [shape=component];
+    "Monitoring Service" [shape=component];
+    "Device Admin" [shape=component];
+    "Notification Service" [shape=component];
+    
+    // Core Monitors
+    "App Monitor" [shape=component];
+    "App Usage Service" [shape=component];
+    "App Limit Monitor" [shape=component];
+    "SMS Monitor" [shape=component];
+    "MMS Monitor" [shape=component];
+    "Call Monitor" [shape=component];
+    "Web Monitor" [shape=component];
+    "Location Monitor" [shape=component];
+    "Contact Monitor" [shape=component];
+    "Clipboard Monitor" [shape=component];
+    "Photos Monitor" [shape=component];
+    "GeoFence Monitor" [shape=component];
+    
+    // Social Media Monitors
+    subgraph cluster_social {
+        label = "Social Media Monitor";
+        style = dashed;
+        "WhatsApp Monitor" [shape=component];
+        "Instagram Monitor" [shape=component];
+        "Snapchat Monitor" [shape=component];
+        "Telegram Monitor" [shape=component];
+        "Notification Monitor" [shape=component];
+    }
+    
+    // Service Initialization
+    "Child App" -> "Monitoring Service" [label="1. Initialize"];
+    "Monitoring Service" -> "Device Admin" [label="2. Request Admin Rights"];
+    
+    // Permission Flows
+    "Device Admin" -> "Camera Control" [style=dotted];
+    "Device Admin" -> "App Control" [style=dotted];
+    
+    // Core Monitoring Flows
+    "Monitoring Service" -> "App Monitor" [label="3. Track Apps"];
+    "Monitoring Service" -> "App Usage Service" [label="4. Track Usage"];
+    "Monitoring Service" -> "App Limit Monitor" [label="5. Apply Limits"];
+    "Monitoring Service" -> "GeoFence Monitor" [label="6. Location Fence"];
+    
+    // Content Monitoring
+    "Monitoring Service" -> "SMS Monitor" [label="7. SMS"];
+    "Monitoring Service" -> "MMS Monitor" [label="8. MMS"];
+    "Monitoring Service" -> "Call Monitor" [label="9. Calls"];
+    "Monitoring Service" -> "Web Monitor" [label="10. Web"];
+    "Monitoring Service" -> "Location Monitor" [label="11. Location"];
+    "Monitoring Service" -> "Contact Monitor" [label="12. Contacts"];
+    "Monitoring Service" -> "Clipboard Monitor" [label="13. Clipboard"];
+    "Monitoring Service" -> "Photos Monitor" [label="14. Photos"];
+    
+    // Social Media & Notifications
+    "Monitoring Service" -> "Social Media Monitor" [label="15. Social Apps"];
+    "Social Media Monitor" -> "WhatsApp Monitor";
+    "Social Media Monitor" -> "Instagram Monitor";
+    "Social Media Monitor" -> "Snapchat Monitor";
+    "Social Media Monitor" -> "Telegram Monitor";
+    "Monitoring Service" -> "Notification Monitor" [label="16. Notifications"];
+    
+    // Data Storage
+    edge [color=blue];
+    {rank=same; "Firebase Auth"; "Firebase DB"; "Firebase Storage"}
+    node [shape=cylinder];
+    
+    // Storage Paths
+    "App Monitor" -> "Firebase DB" [label="apps/"];
+    "App Usage Service" -> "Firebase DB" [label="app_usage/"];
+    "SMS Monitor" -> "Firebase DB" [label="sms/"];
+    "MMS Monitor" -> "Firebase DB" [label="mms/"];
+    "Call Monitor" -> "Firebase DB" [label="calls/"];
+    "Web Monitor" -> "Firebase DB" [label="web_visits/"];
+    "Location Monitor" -> "Firebase DB" [label="location/"];
+    "Contact Monitor" -> "Firebase DB" [label="contacts/"];
+    "Clipboard Monitor" -> "Firebase DB" [label="clipboard/"];
+    "Photos Monitor" -> "Firebase Storage" [label="photos/"];
+    "Social Media Monitor" -> "Firebase DB" [label="social_media/"];
+    "GeoFence Monitor" -> "Firebase DB" [label="geofences/"];
+    "Notification Monitor" -> "Firebase DB" [label="notifications/"];
+    
+    // Parent Control Flow
+    "Parent App" -> "Firebase DB" [label="Fetch Reports"];
+    "Firebase DB" -> "Parent App" [label="Activity Data"];
+    "Parent App" -> "App Limit Monitor" [label="Set Restrictions"];
+    "Parent App" -> "GeoFence Monitor" [label="Set Geofences"];
+    
+    // Layout
+    {rank=same; "Parent App"; "Child App"}
+    {rank=same; "App Monitor"; "App Usage Service"; "App Limit Monitor"}
+    {rank=same; "SMS Monitor"; "MMS Monitor"; "Call Monitor"}
+    {rank=same; "Web Monitor"; "Location Monitor"; "GeoFence Monitor"}
+    {rank=same; "Contact Monitor"; "Clipboard Monitor"; "Photos Monitor"}
+}

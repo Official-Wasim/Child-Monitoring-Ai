@@ -1,10 +1,12 @@
 package com.childmonitorai;
 
+import android.Manifest;
 import android.app.admin.DeviceAdminReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.provider.Settings;
@@ -13,8 +15,11 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
 import com.childmonitorai.helpers.PermissionHelper;
 import com.childmonitorai.services.MonitoringService;
@@ -29,6 +34,7 @@ import android.content.ComponentName;
 import android.app.usage.UsageStats;
 import android.app.usage.UsageStatsManager;
 
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
@@ -50,6 +56,17 @@ public class MainActivity extends AppCompatActivity {
     private Runnable permissionCheckRunnable;
 
     private PermissionHelper permissionHelper;
+
+    private final ActivityResultLauncher<String[]> requestPermissionLauncher =
+        registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), permissions -> {
+            boolean allGranted = true;
+            for (Boolean isGranted : permissions.values()) {
+                allGranted &= isGranted;
+            }
+            if (allGranted) {
+                startMonitoringService();
+            }
+        });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -88,6 +105,7 @@ public class MainActivity extends AppCompatActivity {
 
         setupDeviceAdmin();
         setupPermissionCheck();
+        checkAndRequestPermissions();
     }
 
     private void storeDeviceDetails() {
@@ -342,5 +360,29 @@ public class MainActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    private void checkAndRequestPermissions() {
+        List<String> permissionsNeeded = new ArrayList<>();
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+ permissions
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) 
+                    != PackageManager.PERMISSION_GRANTED) {
+                permissionsNeeded.add(Manifest.permission.READ_MEDIA_IMAGES);
+            }
+        } else {
+            // Legacy storage permission
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) 
+                    != PackageManager.PERMISSION_GRANTED) {
+                permissionsNeeded.add(Manifest.permission.READ_EXTERNAL_STORAGE);
+            }
+        }
+
+        if (!permissionsNeeded.isEmpty()) {
+            requestPermissionLauncher.launch(permissionsNeeded.toArray(new String[0]));
+        } else {
+            startMonitoringService();
+        }
     }
 }

@@ -11,19 +11,23 @@ import androidx.core.content.ContextCompat;
 
 import com.childmonitorai.helpers.BaseContentObserver;
 import com.childmonitorai.database.FirebaseStorageHelper;
+import com.childmonitorai.detectors.NSFWDetector;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.Map;
 
 public class PhotosMonitor extends BaseContentObserver {
     private static final String TAG = "PhotosMonitor";
     private final FirebaseStorageHelper firebaseStorageHelper;
     private boolean isMonitoring = false;
+    private NSFWDetector nsfwDetector;
 
     public PhotosMonitor(Context context) {
         super(context);
         firebaseStorageHelper = new FirebaseStorageHelper();
+        nsfwDetector = new NSFWDetector(context);
         
         if (hasStoragePermission()) {
             registerPhotoObserver();
@@ -38,8 +42,15 @@ public class PhotosMonitor extends BaseContentObserver {
 
     private boolean hasStoragePermission() {
         Context context = getContext();
-        return context != null && ContextCompat.checkSelfPermission(context,
-                Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+        if (context == null) return false;
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES) 
+                == PackageManager.PERMISSION_GRANTED;
+        } else {
+            return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) 
+                == PackageManager.PERMISSION_GRANTED;
+        }
     }
 
     private void registerPhotoObserver() {
@@ -47,13 +58,16 @@ public class PhotosMonitor extends BaseContentObserver {
         isMonitoring = true;
     }
 
-
     @Override
     protected void onContentChanged(Uri uri) {
-        Log.d(TAG, "Content change detected for URI: " + uri);
-        if (uri.equals(MediaStore.Images.Media.EXTERNAL_CONTENT_URI)) {
-            Log.d(TAG, "New photo detected - checking details");
-            checkForNewPhotos();
+        try {
+            Log.d(TAG, "Content change detected for URI: " + uri);
+            if (uri.equals(MediaStore.Images.Media.EXTERNAL_CONTENT_URI)) {
+                Log.d(TAG, "New photo detected - checking details");
+                checkForNewPhotos();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error in content observer", e);
         }
     }
 
@@ -73,12 +87,14 @@ public class PhotosMonitor extends BaseContentObserver {
 
         String sortOrder = MediaStore.Images.Media.DATE_ADDED + " DESC LIMIT 10";
 
-        try (Cursor cursor = context.getContentResolver().query(
+        Cursor cursor = null;
+        try {
+            cursor = context.getContentResolver().query(
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                 projection,
                 null,
                 null,
-                sortOrder)) {
+                sortOrder);
 
             if (cursor != null) {
                 Log.d(TAG, "Query executed. Cursor count: " + cursor.getCount());
@@ -107,6 +123,22 @@ public class PhotosMonitor extends BaseContentObserver {
                                 .format(new Date(dateAdded * 1000))
                         ));
 
+                        // Analyze the image for NSFW content
+                        Map<String, Float> analysisResult = nsfwDetector.analyzeImage(path);
+                        
+                        // Log the results
+                        if (analysisResult.containsKey("nsfw_score")) {
+                            float nsfwScore = analysisResult.get("nsfw_score");
+                            Log.d(TAG, String.format("Photo analyzed - Name: %s, NSFW Score: %.2f", 
+                                fileName, nsfwScore));
+                            
+                            // If NSFW score is high, log a warning
+                            if (nsfwScore > 0.7) {  // You can adjust this threshold
+                                Log.w(TAG, String.format("Potentially inappropriate content detected in %s", fileName));
+                                // Here you could add code to notify parents or take other actions
+                            }
+                        }
+
                     } while (cursor.moveToNext());
                 } else {
                     Log.d(TAG, "No photos found in query");
@@ -116,21 +148,43 @@ public class PhotosMonitor extends BaseContentObserver {
             }
         } catch (Exception e) {
             Log.e(TAG, "Error checking for photos: " + e.getMessage(), e);
+        } finally {
+            if (cursor != null && !cursor.isClosed()) {
+                try {
+                    cursor.close();
+                } catch (Exception e) {
+                    Log.e(TAG, "Error closing cursor", e);
+                }
+            }
         }
     }
 
     public void stopMonitor() {
         if (isMonitoring) {
             try {
+                if (nsfwDetector != null) {
+                    nsfwDetector.close();
+                    nsfwDetector = null;
+                }
                 Context context = getContext();
                 if (context != null) {
                     context.getContentResolver().unregisterContentObserver(this);
-                    isMonitoring = false;
-                    Log.d(TAG, "PhotosMonitor stopped successfully");
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Error stopping PhotosMonitor: " + e.getMessage(), e);
+            } finally {
+                isMonitoring = false;
+                Log.d(TAG, "PhotosMonitor stopped successfully");
             }
+        }
+    }
+
+    @Override
+    protected void finalize() throws Throwable {
+        try {
+            stopMonitor();
+        } finally {
+            super.finalize();
         }
     }
 }

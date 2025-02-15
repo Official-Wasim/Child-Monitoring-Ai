@@ -11,6 +11,8 @@ import com.childmonitorai.database.DatabaseHelper;
 import com.childmonitorai.helpers.Preferences;
 import com.childmonitorai.models.AppData;
 import com.childmonitorai.services.FcmService;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
 
 import java.util.List;
 
@@ -158,6 +160,28 @@ public class AppMonitor {
             // Check if app install alerts are enabled in preferences
             Preferences preferences = new Preferences();
             if (preferences.isAppInstallAlert()) {
+                // Save notification to Firebase
+                String currentDate = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault()).format(new java.util.Date());
+                DatabaseReference notificationsRef = FirebaseDatabase.getInstance()
+                    .getReference("users")
+                    .child(userId)
+                    .child("phones")
+                    .child(phoneModel)
+                    .child("notifications")
+                    .child(currentDate);
+
+                String notificationId = notificationsRef.push().getKey();
+                java.util.Map<String, Object> notification = new java.util.HashMap<>();
+                notification.put("title", "New App Installed");
+                notification.put("body", "The app " + appName + " has been installed on childs device");
+                notification.put("timestamp", timestamp);
+                notification.put("type", "app_install");
+                notification.put("packageName", packageName);
+
+                if (notificationId != null) {
+                    notificationsRef.child(notificationId).setValue(notification);
+                }
+
                 // Send notification through FCM service
                 Intent fcmIntent = new Intent(context, FcmService.class);
                 fcmIntent.putExtra("title", "New App Installed");

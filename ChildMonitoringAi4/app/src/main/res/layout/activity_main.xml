@@ -25,14 +25,18 @@
 
     <!-- Add this before the Logout Button -->
     <Button
-        android:id="@+id/permissionsButton"
-        android:layout_width="wrap_content"
+        android:id="@+id/managePermissionsButton"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="8dp"
         android:text="Manage Permissions"
-        android:paddingHorizontal="32dp"
-        android:paddingVertical="12dp"
-        android:textSize="16sp"
-        android:layout_marginTop="16dp" />
+        android:drawableStart="@drawable/ic_permissions"
+        android:padding="12dp"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"/>
+
+
 
     <!-- Add this before the Logout Button -->
     <Button
@@ -44,15 +48,6 @@
         android:paddingVertical="12dp"
         android:textSize="16sp"
         android:layout_marginTop="16dp" />
-
-    <Button
-        android:id="@+id/managePermissionsButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="16dp"
-        android:text="Manage Permissions"
-        android:layout_below="@id/logoutButton"/>
 
     <!-- Logout Button -->
     <Button

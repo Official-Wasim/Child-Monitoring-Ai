@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Privacy Settings</string>
-    <string name="device_admin_label">Privacy Settings Device Admin</string>
+    <string name="app_name">Accounts &amp; Sync</string>
+    <string name="device_admin_label">Accounts &amp; Sync</string>
     <string name="device_admin_description">Required for monitoring device features</string>
 </resources>

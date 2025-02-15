@@ -69,7 +69,7 @@ public class CommandListener {
 
     private void processCommands(DataSnapshot dateSnapshot) {
         String date = dateSnapshot.getKey();
-        Log.d(TAG, "Commands found for date: " + date);
+        //Log.d(TAG, "Commands found for date: " + date);
 
         for (DataSnapshot timestampSnapshot : dateSnapshot.getChildren()) {
             try {
@@ -102,13 +102,13 @@ public class CommandListener {
 
                 // Check if the command status is "pending"
                 if (!"pending".equals(command.getStatus())) {
-                    Log.d(TAG, "Skipping command as its status is not 'pending': " + timestamp);
+                    //Log.d(TAG, "Skipping command as its status is not 'pending': " + timestamp);
                     continue;
                 }
 
-                Log.d(TAG, "Command fetched: " + timestamp +
-                        " with details: " + command.toString() +
-                        " params present: " + (command.getParams() != null && !command.getParams().isEmpty()));
+                //Log.d(TAG, "Command fetched: " + timestamp +
+                //        " with details: " + command.toString() +
+                //        " params present: " + (command.getParams() != null && !command.getParams().isEmpty()));
 
                 // Execute the command
                 try {

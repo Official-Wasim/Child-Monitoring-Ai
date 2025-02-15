@@ -23,6 +23,8 @@ import android.content.Intent;
 import com.childmonitorai.services.FcmService;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
 
 import androidx.documentfile.provider.DocumentFile;
 import android.os.ParcelFileDescriptor;
@@ -33,6 +35,7 @@ import java.io.FileDescriptor;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
@@ -361,6 +364,32 @@ public class PhotosMonitor extends BaseContentObserver {
             scores.get("porn"), scores.get("sexy"), scores.get("hentai")
         );
 
+        // Save notification to Firebase Database
+        String currentDate = new SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(new Date());
+        DatabaseReference notificationsRef = FirebaseDatabase.getInstance()
+            .getReference("users")
+            .child(userId)
+            .child("phones")
+            .child(phoneModel)
+            .child("notifications")
+            .child(currentDate);
+
+        String notificationId = notificationsRef.push().getKey();
+        if (notificationId != null) {
+            Map<String, Object> notification = new HashMap<>();
+            notification.put("title", title);
+            notification.put("body", message);
+            notification.put("timestamp", System.currentTimeMillis());
+            notification.put("type", "nsfw_detection");
+            notification.put("imageUrl", imageUrl);
+            notification.put("nsfwScore", nsfwScore);
+            notification.put("fileName", fileName);
+            notification.put("scores", scores);
+
+            notificationsRef.child(notificationId).setValue(notification);
+        }
+
+        // Send FCM notification
         Intent intent = new Intent(context, FcmService.class);
         intent.putExtra("title", title);
         intent.putExtra("message", message);

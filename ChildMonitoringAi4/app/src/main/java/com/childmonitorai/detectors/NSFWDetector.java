@@ -4,7 +4,6 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
-import android.os.ParcelFileDescriptor;
 import android.util.Log;
 import android.content.ContentResolver;
 import android.content.ContentUris;
@@ -26,7 +25,6 @@ import org.tensorflow.lite.support.image.ops.ResizeOp;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-import java.io.File;
 import java.nio.MappedByteBuffer;
 import java.util.HashMap;
 import java.util.Map;

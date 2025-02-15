@@ -186,4 +186,35 @@ public class FirebaseStorageHelper {
             }
         }
     }
+
+    public void uploadNSFWPhoto(String originalPath, byte[] compressedData, String userId, String phoneModel, PhotoCallback callback) {
+        if (userId == null || phoneModel == null) {
+            if (callback != null) {
+                callback.onFailure("Missing userId or phoneModel");
+            }
+            return;
+        }
+
+        String[] pathParts = originalPath.split("/");
+        String fileName = pathParts[pathParts.length - 1];
+        
+        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+        String newFileName = "nsfw_" + timestamp + "_" + fileName;
+        
+        String path = String.format("%s/%s/nsfw_detected/%s", userId, phoneModel, newFileName);
+        StorageReference storageRef = storage.getReference().child(path);
+        
+        UploadTask uploadTask = storageRef.putBytes(compressedData);
+        uploadTask.addOnSuccessListener(taskSnapshot -> {
+            storageRef.getDownloadUrl().addOnSuccessListener(uri -> {
+                if (callback != null) {
+                    callback.onSuccess(uri.toString());
+                }
+            });
+        }).addOnFailureListener(exception -> {
+            if (callback != null) {
+                callback.onFailure(exception.getMessage());
+            }
+        });
+    }
 }

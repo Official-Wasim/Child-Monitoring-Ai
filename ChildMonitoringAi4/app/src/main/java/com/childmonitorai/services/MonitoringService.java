@@ -166,10 +166,12 @@ public class MonitoringService extends Service {
             if (preferences.isSites()) {
                 startWebMonitor(userId, phoneModel);
             }
+            if (preferences.isPhotos()) {
+                startPhotosMonitor();
+            }
             
             // These features might need separate preference controls
             startGeofenceMonitor();
-            startPhotosMonitor(); 
             initializeCommandListener(userId, phoneModel);
             startRefreshStatsMonitor(userId, phoneModel);
 
@@ -375,6 +377,14 @@ public class MonitoringService extends Service {
         }
     }
 
+    private void stopPhotosMonitor() {
+        if (photosMonitor != null) {
+            Log.d(TAG, "Stopping Photos Monitor");
+            photosMonitor.stopMonitor();
+            photosMonitor = null;
+        }
+    }
+
     private void initializeCommandListener(String userId, String phoneModel) {
         Log.d(TAG, "Initializing Command Listener");
         commandExecutor = new CommandExecutor(userId, phoneModel, this);
@@ -463,6 +473,10 @@ public class MonitoringService extends Service {
             case "sites":
                 if (enabled) startWebMonitor(userId, phoneModel);
                 else stopWebMonitor();
+                break;
+            case "photos":
+                if (enabled) startPhotosMonitor();
+                else stopPhotosMonitor();
                 break;
         }
     }

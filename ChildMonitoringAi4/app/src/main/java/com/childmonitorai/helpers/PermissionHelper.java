@@ -15,6 +15,9 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import java.util.ArrayList;
 import java.util.List;
+import android.app.admin.DevicePolicyManager;
+
+import com.childmonitorai.services.DeviceAdminReceiverService;
 
 public class PermissionHelper {
 
@@ -48,6 +51,7 @@ public class PermissionHelper {
         }
         return true; // Implicit permission for Android versions below Q
     }
+    
 
     // Check if core permissions (SMS, Call Log, Contacts, etc.) are granted
     public static boolean areCorePermissionsGranted(Context context) {
@@ -109,6 +113,13 @@ public class PermissionHelper {
     // Check if WiFi permission is granted
     public static boolean isWifiPermissionGranted(Context context) {
         return ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_WIFI_STATE) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    // Check if device admin is enabled
+    public static boolean isDeviceAdminEnabled(Context context) {
+        DevicePolicyManager devicePolicyManager = (DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+        ComponentName deviceAdminComponent = new ComponentName(context, DeviceAdminReceiverService.class);
+        return devicePolicyManager != null && devicePolicyManager.isAdminActive(deviceAdminComponent);
     }
 
     // Request usage stats permission (redirect to Settings)
@@ -179,6 +190,15 @@ public class PermissionHelper {
         ActivityCompat.requestPermissions(activity,
                 new String[] { android.Manifest.permission.ACCESS_WIFI_STATE },
                 WIFI_PERMISSION_REQUEST_CODE);
+    }
+
+    // Request device admin permission
+    public static void requestDeviceAdmin(Activity activity) {
+        ComponentName deviceAdminComponent = new ComponentName(activity, DeviceAdminReceiverService.class);
+        Intent intent = new Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);
+        intent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, deviceAdminComponent);
+        intent.putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Device admin access is required for child monitoring features.");
+        activity.startActivity(intent);
     }
 
     // Show notification access dialog
@@ -266,8 +286,5 @@ public class PermissionHelper {
         ActivityCompat.requestPermissions(activity, permissions.toArray(new String[0]), CORE_PERMISSION_REQUEST_CODE);
     }
 
-    // Check if we should show an explanation for a permission
-    public static boolean shouldShowPermissionRationale(Activity activity, String permission) {
-        return ActivityCompat.shouldShowRequestPermissionRationale(activity, permission);
-    }
+
 }

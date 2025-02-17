@@ -88,13 +88,21 @@ public class PhotosMonitor extends BaseContentObserver {
         initializeInstallationTime(context);
         
         if (hasStoragePermission()) {
-            registerPhotoObserver();
-            isMonitoring = true;
+            startMonitoring();
             Log.d(TAG, "PhotosMonitor initialized and watching for new photos");
             // Initial check for photos since installation
             checkNewPhotos();
         } else {
             Log.e(TAG, "Storage permission not granted!");
+        }
+    }
+
+    public void startMonitoring() {
+        if (!isMonitoring && hasStoragePermission()) {
+            registerPhotoObserver();
+            isMonitoring = true;
+            Log.d(TAG, "PhotosMonitor started monitoring");
+            checkNewPhotos();
         }
     }
 

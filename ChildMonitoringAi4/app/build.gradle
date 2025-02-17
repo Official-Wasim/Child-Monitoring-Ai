@@ -76,4 +76,10 @@ dependencies {
 
     // Add DocumentFile support
     implementation "androidx.documentfile:documentfile:1.0.1"
+
+    // Add CardView support
+    implementation 'androidx.cardview:cardview:1.0.0'
+
+    // Add Material Design dependency
+    implementation 'com.google.android.material:material:1.9.0'
 }

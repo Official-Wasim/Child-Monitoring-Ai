@@ -13,6 +13,7 @@ import static com.childmonitorai.helpers.PermissionHelper.isLocationPermissionGr
 import static com.childmonitorai.helpers.PermissionHelper.areCorePermissionsGranted;
 import static com.childmonitorai.helpers.AccessibilityPermissionHelper.isAccessibilityServiceEnabled;
 
+import com.childmonitorai.helpers.PermissionHelper;
 import com.childmonitorai.services.WebMonitorService;
 
 public class PermissionActivity extends AppCompatActivity {
@@ -87,7 +88,24 @@ public class PermissionActivity extends AppCompatActivity {
 
         titleView.setText(title);
         descView.setText(description);
+        
+        boolean isPermissionGranted = getPermissionStatusForCard(card);
+        permissionSwitch.setEnabled(!isPermissionGranted);
+        permissionSwitch.setAlpha(isPermissionGranted ? 0.5f : 1.0f);
         permissionSwitch.setOnClickListener(switchListener);
+    }
+
+    private boolean getPermissionStatusForCard(View card) {
+        if (card == cardCore) {
+            return areCorePermissionsGranted(this);
+        } else if (card == cardLocation) {
+            return isLocationPermissionGranted(this);
+        } else if (card == cardAccessibility) {
+            return isAccessibilityServiceEnabled(this, WebMonitorService.class);
+        } else if (card == cardDeviceAdmin) {
+            return PermissionHelper.isDeviceAdminEnabled(this);
+        }
+        return false;
     }
 
     private void handleCorePermissions(View view) {
@@ -116,7 +134,9 @@ public class PermissionActivity extends AppCompatActivity {
     }
 
     private void handleDeviceAdminPermission(View view) {
-        // Handle device admin permission
+        if (!PermissionHelper.isDeviceAdminEnabled(this)) {
+            PermissionHelper.requestDeviceAdmin(this);
+        }
     }
 
     @Override
@@ -130,10 +150,16 @@ public class PermissionActivity extends AppCompatActivity {
         updatePermissionStatus(cardLocation, isLocationPermissionGranted(this));
         updatePermissionStatus(cardAccessibility, 
             isAccessibilityServiceEnabled(this, WebMonitorService.class));
+        updatePermissionStatus(cardDeviceAdmin, PermissionHelper.isDeviceAdminEnabled(this));
     }
 
     private void updatePermissionStatus(View card, boolean isGranted) {
         Switch permissionSwitch = card.findViewById(R.id.permission_switch);
         permissionSwitch.setChecked(isGranted);
+        permissionSwitch.setEnabled(!isGranted);
+        
+        // Only apply alpha if permission is granted (switch is checked)
+        float alpha = isGranted ? 0.5f : 1.0f;
+        permissionSwitch.setAlpha(alpha);
     }
 }

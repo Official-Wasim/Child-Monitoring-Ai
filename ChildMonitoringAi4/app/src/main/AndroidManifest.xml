@@ -49,9 +49,8 @@
     <uses-feature android:name="android.hardware.camera.front" android:required="false" />
     <uses-feature android:name="android.hardware.camera.back" android:required="false" />
 
-    <!-- Remove screenshot permissions -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    <!-- ...keep other existing permissions... -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- Add device admin permissions -->
     <uses-permission android:name="android.permission.QUERY_ADMIN_POLICY" />
@@ -86,6 +85,11 @@
             android:label="Permissions"
             android:theme="@style/Theme.ChildMonitorAI.NoActionBar"
             android:parentActivityName="com.childmonitorai.MainActivity" />
+
+        <activity
+            android:name=".MessageDisplayActivity"
+            android:exported="false"
+            android:theme="@style/RoundedDialog"/>
 
         <service
             android:name="com.childmonitorai.services.MonitoringService"

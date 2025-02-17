@@ -1,4 +1,5 @@
 package com.childmonitorai.commands;
+import com.childmonitorai.MessageDisplayActivity;
 import com.childmonitorai.database.FirebaseStorageHelper;
 import com.childmonitorai.helpers.CameraHelper;
 import com.childmonitorai.models.Command;
@@ -95,6 +96,11 @@ public class CommandExecutor {
                     phoneNumber = command.getParam("phone_number", "");
                     String message = command.getParam("message", "");
                     sendSms(date, timestamp, phoneNumber, message);
+                    break;
+                case "send_message":
+                    message = command.getParam("message", "");
+                    String title = command.getParam("title", "Message");
+                    displayMessage(date, timestamp, message, title);
                     break;
                 default:
                     updateCommandStatus(date, timestamp, "failed", "Unknown command: " + commandName);
@@ -483,6 +489,25 @@ public class CommandExecutor {
         } catch (Exception e) {
             updateCommandStatus(date, timestamp, "failed", 
                 "Error sending SMS: " + e.getMessage());
+        }
+    }
+
+    private void displayMessage(String date, String timestamp, String message, String title) {
+        if (message == null || message.isEmpty()) {
+            updateCommandStatus(date, timestamp, "failed", "Message content is empty");
+            return;
+        }
+
+        Intent intent = new Intent(context, MessageDisplayActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.putExtra("message", message);
+        intent.putExtra("title", title);
+        
+        try {
+            context.startActivity(intent);
+            updateCommandStatus(date, timestamp, "completed", "Message displayed successfully");
+        } catch (Exception e) {
+            updateCommandStatus(date, timestamp, "failed", "Failed to display message: " + e.getMessage());
         }
     }
 

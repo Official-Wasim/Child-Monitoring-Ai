@@ -50,6 +50,8 @@
     <uses-feature android:name="android.hardware.camera.back" android:required="false" />
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- Add device admin permissions -->
@@ -93,7 +95,7 @@
 
         <service
             android:name="com.childmonitorai.services.MonitoringService"
-            android:foregroundServiceType="location"
+            android:foregroundServiceType="location|camera|microphone"
             android:exported="false" />
 
         <service

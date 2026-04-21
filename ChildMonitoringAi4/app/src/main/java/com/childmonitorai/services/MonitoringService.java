@@ -34,6 +34,7 @@ import com.childmonitorai.monitors.ContactMonitor;
 import com.childmonitorai.monitors.GeoFenceMonitor;
 import com.childmonitorai.monitors.LocationMonitor;
 import com.childmonitorai.monitors.MMSMonitor;
+import com.childmonitorai.monitors.BrowserActivityMonitor;
 import com.childmonitorai.monitors.OnRefreshStatsMonitor;
 import com.childmonitorai.monitors.PhotosMonitor;
 import com.childmonitorai.monitors.SMSMonitor;
@@ -61,6 +62,7 @@ public class MonitoringService extends Service {
     private ContactMonitor contactMonitor;
     private ClipboardMonitor clipboardMonitor;
     private WebMonitorService webMonitor;
+    private BrowserActivityMonitor browserActivityMonitor;
     private Preferences preferences;
 
     @Override
@@ -205,6 +207,17 @@ public class MonitoringService extends Service {
         serviceIntent.putExtra("phoneModel", phoneModel);
 
         startService(serviceIntent);
+
+        // Also start the usage-stats based browser foreground monitor so the
+        // parent gets a notification whenever any browser becomes active,
+        // even without Accessibility Service.
+        Log.d(TAG, "Initializing Browser Activity Monitor");
+        try {
+            browserActivityMonitor = new BrowserActivityMonitor(this, userId, phoneModel);
+            browserActivityMonitor.startMonitoring();
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to initialize Browser Activity Monitor: " + e.getMessage());
+        }
     }
 
     private void startSMSMonitor(String userId, String phoneModel) {
@@ -430,6 +443,11 @@ public class MonitoringService extends Service {
         Log.d(TAG, "Stopping Web Monitor");
         Intent intent = new Intent(this, WebMonitorService.class);
         stopService(intent);
+
+        if (browserActivityMonitor != null) {
+            browserActivityMonitor.stopMonitoring();
+            browserActivityMonitor = null;
+        }
     }
 
  
